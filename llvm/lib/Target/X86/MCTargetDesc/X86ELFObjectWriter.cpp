@@ -42,7 +42,9 @@ X86ELFObjectWriter::X86ELFObjectWriter(bool IsELF64, uint8_t OSABI,
                               // Only i386 and IAMCU use Rel instead of RelA.
                               /*HasRelocationAddend*/
                               (EMachine != ELF::EM_386) &&
-                                  (EMachine != ELF::EM_IAMCU)) {}
+                                  (EMachine != ELF::EM_IAMCU)) {
+
+}
 
 enum X86_64RelType { RT64_NONE, RT64_64, RT64_32, RT64_32S, RT64_16, RT64_8 };
 

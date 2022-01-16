@@ -799,6 +799,9 @@ AsmParser::AsmParser(SourceMgr &SM, MCContext &Ctx, MCStreamer &Out,
   case MCContext::IsXCOFF:
     PlatformParser.reset(createXCOFFAsmParser());
     break;
+  case MCContext::IsSOFF:
+    llvm_unreachable("not implemented yet");
+    break;
   }
 
   PlatformParser->Initialize(*this);

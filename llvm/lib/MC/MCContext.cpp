@@ -29,6 +29,7 @@
 #include "llvm/MC/MCSectionMachO.h"
 #include "llvm/MC/MCSectionWasm.h"
 #include "llvm/MC/MCSectionXCOFF.h"
+#include "llvm/MC/MCSectionSOFF.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCSymbolCOFF.h"
@@ -37,6 +38,7 @@
 #include "llvm/MC/MCSymbolMachO.h"
 #include "llvm/MC/MCSymbolWasm.h"
 #include "llvm/MC/MCSymbolXCOFF.h"
+#include "llvm/MC/MCSymbolSOFF.h"
 #include "llvm/MC/SectionKind.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
@@ -93,6 +95,9 @@ MCContext::MCContext(const Triple &TheTriple, const MCAsmInfo *mai,
     break;
   case Triple::ELF:
     Env = IsELF;
+    break;
+  case Triple::SOFF:
+    Env = IsSOFF;
     break;
   case Triple::Wasm:
     Env = IsWasm;
@@ -163,6 +168,7 @@ void MCContext::reset() {
   COFFUniquingMap.clear();
   WasmUniquingMap.clear();
   XCOFFUniquingMap.clear();
+  SOFFUniquingMap.clear();
 
   ELFEntrySizeMap.clear();
   ELFSeenGenericMergeableSections.clear();
@@ -243,6 +249,8 @@ MCSymbol *MCContext::createSymbolImpl(const StringMapEntry<bool> *Name,
     return new (Name, *this) MCSymbolWasm(Name, IsTemporary);
   case MCContext::IsXCOFF:
     return createXCOFFSymbolImpl(Name, IsTemporary);
+  case MCContext::IsSOFF:
+    return new (Name, *this) MCSymbolSOFF(Name, IsTemporary);
   }
   return new (Name, *this) MCSymbol(MCSymbol::SymbolKindUnset, Name,
                                     IsTemporary);
@@ -792,6 +800,28 @@ MCSectionXCOFF *MCContext::getXCOFFSection(
 
   if (Begin)
     Begin->setFragment(F);
+
+  return Result;
+}
+
+MCSectionSOFF *MCContext::getSOFFSection(const Twine &Section, SectionKind K,
+                                         unsigned int Flags) {
+  auto SecKey = std::string();
+  if (K.isText())
+    SecKey = "SOFF_Text";
+  else if (K.isData())
+    SecKey = "SOFF_Data";
+  else
+    llvm_unreachable("bad section kind");
+
+  // Do the lookup, if we have a hit, return it.
+  auto IterBool = SOFFUniquingMap.insert(std::make_pair(SecKey, nullptr));
+  auto &Entry = *IterBool.first;
+  if (!IterBool.second)
+    return Entry.second;
+
+  MCSectionSOFF *Result = new MCSectionSOFF(SecKey, K, nullptr);
+  Entry.second = Result;
 
   return Result;
 }

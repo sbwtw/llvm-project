@@ -981,6 +981,11 @@ void MCObjectFileInfo::initXCOFFMCObjectFileInfo(const Triple &T) {
       /* MultiSymbolsAllowed */ true, ".dwmac", XCOFF::SSUBTYP_DWMAC);
 }
 
+void MCObjectFileInfo::initSOFFMCObjectFileInfo(const Triple &T) {
+  TextSection = (MCSection *)Ctx->getSOFFSection(".text", SectionKind::getText());
+  DataSection = (MCSection *)Ctx->getSOFFSection(".data", SectionKind::getData());
+}
+
 MCObjectFileInfo::~MCObjectFileInfo() {}
 
 void MCObjectFileInfo::initMCObjectFileInfo(MCContext &MCCtx, bool PIC,
@@ -1007,6 +1012,9 @@ void MCObjectFileInfo::initMCObjectFileInfo(MCContext &MCCtx, bool PIC,
 
   Triple TheTriple = Ctx->getTargetTriple();
   switch (Ctx->getObjectFileType()) {
+  case MCContext::IsSOFF:
+    initSOFFMCObjectFileInfo(TheTriple);
+    break;
   case MCContext::IsMachO:
     initMachOMCObjectFileInfo(TheTriple);
     break;
@@ -1040,6 +1048,7 @@ MCSection *MCObjectFileInfo::getDwarfComdatSection(const char *Name,
   case Triple::MachO:
   case Triple::COFF:
   case Triple::GOFF:
+  case Triple::SOFF:
   case Triple::XCOFF:
   case Triple::UnknownObjectFormat:
     report_fatal_error("Cannot get DWARF comdat section for this object file "
