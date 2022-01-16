@@ -56,6 +56,7 @@ namespace llvm {
   class MCSectionMachO;
   class MCSectionWasm;
   class MCSectionXCOFF;
+  class MCSectionSOFF;
   class MCStreamer;
   class MCSymbol;
   class MCSymbolELF;
@@ -75,7 +76,7 @@ namespace llvm {
     using DiagHandlerTy =
         std::function<void(const SMDiagnostic &, bool, const SourceMgr &,
                            std::vector<const MDNode *> &)>;
-    enum Environment { IsMachO, IsELF, IsGOFF, IsCOFF, IsWasm, IsXCOFF };
+    enum Environment { IsMachO, IsELF, IsGOFF, IsCOFF, IsWasm, IsXCOFF, IsSOFF };
 
   private:
     Environment Env;
@@ -328,6 +329,7 @@ namespace llvm {
     std::map<std::string, MCSectionGOFF *> GOFFUniquingMap;
     std::map<WasmSectionKey, MCSectionWasm *> WasmUniquingMap;
     std::map<XCOFFSectionKey, MCSectionXCOFF *> XCOFFUniquingMap;
+    std::map<std::string, MCSectionSOFF *> SOFFUniquingMap;
     StringMap<bool> RelSecNames;
 
     SpecificBumpPtrAllocator<MCSubtargetInfo> MCSubtargetAllocator;
@@ -647,6 +649,9 @@ namespace llvm {
         Optional<XCOFF::CsectProperties> CsectProp = None,
         bool MultiSymbolsAllowed = false, const char *BeginSymName = nullptr,
         Optional<XCOFF::DwarfSectionSubtypeFlags> DwarfSubtypeFlags = None);
+
+    MCSectionSOFF *getSOFFSection(const Twine &Section, SectionKind K,
+                                  unsigned Flags = 0);
 
     // Create and save a copy of STI and return a reference to the copy.
     MCSubtargetInfo &getSubtargetCopy(const MCSubtargetInfo &STI);

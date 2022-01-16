@@ -64,6 +64,9 @@ add_llvm_component_library(LLVMMC
   WasmObjectWriter.cpp
   WinCOFFObjectWriter.cpp
   XCOFFObjectWriter.cpp
+  MCSOFFObjectWriter.cpp
+  MCSectionSOFF.cpp
+  MCSOFFStreamer.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${LLVM_MAIN_INCLUDE_DIR}/llvm/MC

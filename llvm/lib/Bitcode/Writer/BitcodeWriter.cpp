@@ -4874,6 +4874,8 @@ static const char *getSectionNameForCommandline(const Triple &T) {
     break;
   case Triple::XCOFF:
     llvm_unreachable("XCOFF is not yet implemented");
+  case Triple::SOFF:
+    llvm_unreachable("SOFF is not yet implemented");
     break;
   }
   llvm_unreachable("Unimplemented ObjectFormatType");

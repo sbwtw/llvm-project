@@ -1239,6 +1239,19 @@ public:
   }
 };
 
+class SOSX86AsmBackend : public X86AsmBackend {
+public:
+  SOSX86AsmBackend(const Target &T, const MCSubtargetInfo &STI)
+      : X86AsmBackend(T, STI)
+  {
+  }
+
+  std::unique_ptr<MCObjectTargetWriter>
+  createObjectTargetWriter() const override {
+    return createX86SOSObjectWriter();
+  }
+};
+
 namespace CU {
 
   /// Compact unwind encoding values.
@@ -1622,6 +1635,9 @@ MCAsmBackend *llvm::createX86_64AsmBackend(const Target &T,
 
   if (TheTriple.isOSWindows() && TheTriple.isOSBinFormatCOFF())
     return new WindowsX86AsmBackend(T, true, STI);
+
+  if (TheTriple.isOSSos())
+    return new SOSX86AsmBackend(T, STI);
 
   uint8_t OSABI = MCELFObjectTargetWriter::getOSABI(TheTriple.getOS());
 

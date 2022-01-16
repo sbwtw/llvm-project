@@ -224,6 +224,7 @@ StringRef Triple::getOSTypeName(OSType Kind) {
   case PS4: return "ps4";
   case RTEMS: return "rtems";
   case Solaris: return "solaris";
+  case SOS: return "sos";
   case TvOS: return "tvos";
   case WASI: return "wasi";
   case WatchOS: return "watchos";
@@ -548,6 +549,7 @@ static Triple::OSType parseOS(StringRef OSName) {
     .StartsWith("hurd", Triple::Hurd)
     .StartsWith("wasi", Triple::WASI)
     .StartsWith("emscripten", Triple::Emscripten)
+    .StartsWith("sos", Triple::SOS)
     .Default(Triple::UnknownOS);
 }
 
@@ -691,6 +693,7 @@ static StringRef getObjectFormatTypeName(Triple::ObjectFormatType Kind) {
   case Triple::MachO: return "macho";
   case Triple::Wasm:  return "wasm";
   case Triple::XCOFF: return "xcoff";
+  case Triple::SOFF:  return "xoff";
   }
   llvm_unreachable("unknown object format type");
 }
@@ -708,6 +711,8 @@ static Triple::ObjectFormatType getDefaultFormat(const Triple &T) {
       return Triple::MachO;
     else if (T.isOSWindows())
       return Triple::COFF;
+    else if (T.isOSSos())
+      return Triple::SOFF;
     return Triple::ELF;
 
   case Triple::aarch64_be:

@@ -170,3 +170,5 @@ X86MCAsmInfoGNUCOFF::X86MCAsmInfoGNUCOFF(const Triple &Triple) {
 
   AllowAtInName = true;
 }
+
+X86MCAsmInfoSOSSOFF::X86MCAsmInfoSOSSOFF(const Triple &Triple) {}

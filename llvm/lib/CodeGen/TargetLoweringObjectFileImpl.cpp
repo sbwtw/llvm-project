@@ -2560,3 +2560,19 @@ MCSection *TargetLoweringObjectFileGOFF::SelectSectionForGlobal(
 
   return getContext().getObjectFileInfo()->getTextSection();
 }
+
+//===----------------------------------------------------------------------===//
+//                                  SOFF
+//===----------------------------------------------------------------------===//
+TargetLoweringObjectFileSOFF::TargetLoweringObjectFileSOFF()
+    : TargetLoweringObjectFile() {}
+
+MCSection *TargetLoweringObjectFileSOFF::getExplicitSectionGlobal(
+    const GlobalObject *GO, SectionKind Kind, const TargetMachine &TM) const {
+  return getContext().getObjectFileInfo()->getTextSection();
+}
+
+MCSection *TargetLoweringObjectFileSOFF::SelectSectionForGlobal(
+    const GlobalObject *GO, SectionKind Kind, const TargetMachine &TM) const {
+  return getContext().getObjectFileInfo()->getTextSection();
+}

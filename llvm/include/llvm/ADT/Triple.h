@@ -202,6 +202,7 @@ public:
     HermitCore, // HermitCore Unikernel/Multikernel
     Hurd,       // GNU/Hurd
     WASI,       // Experimental WebAssembly OS
+    SOS,
     Emscripten,
     LastOSType = Emscripten
   };
@@ -241,6 +242,7 @@ public:
     MachO,
     Wasm,
     XCOFF,
+    SOFF,
   };
 
 private:
@@ -530,6 +532,10 @@ public:
   /// Tests whether the OS is Windows.
   bool isOSWindows() const {
     return getOS() == Triple::Win32;
+  }
+
+  bool isOSSos() const {
+    return getOS() == Triple::SOS;
   }
 
   /// Checks if the environment is MSVC.

@@ -295,6 +295,20 @@ public:
                                       const TargetMachine &TM) const override;
 };
 
+class TargetLoweringObjectFileSOFF : public TargetLoweringObjectFile {
+public:
+  TargetLoweringObjectFileSOFF();
+  ~TargetLoweringObjectFileSOFF() override = default;
+
+  MCSection *getExplicitSectionGlobal(const GlobalObject *GO, SectionKind Kind,
+                           const TargetMachine &TM) const override;
+
+protected:
+  MCSection *SelectSectionForGlobal(const GlobalObject *GO,
+                                        SectionKind Kind,
+                                        const TargetMachine &TM) const override;
+};
+
 } // end namespace llvm
 
 #endif // LLVM_CODEGEN_TARGETLOWERINGOBJECTFILEIMPL_H
