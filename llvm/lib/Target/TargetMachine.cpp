@@ -144,6 +144,9 @@ bool TargetMachine::shouldAssumeDSOLocal(const Module &M,
     return GV->isStrongDefinitionForLinker();
   }
 
+  if (TT.isOSSos())
+    return true;
+
   assert(TT.isOSBinFormatELF() || TT.isOSBinFormatWasm() ||
          TT.isOSBinFormatXCOFF());
   return false;

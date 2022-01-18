@@ -90,7 +90,7 @@ createAsmStreamer(MCContext &Ctx, std::unique_ptr<formatted_raw_ostream> OS,
                   MCInstPrinter *InstPrint, std::unique_ptr<MCCodeEmitter> &&CE,
                   std::unique_ptr<MCAsmBackend> &&TAB, bool ShowInst);
 
-MCStreamer *createSOFFStreamer(MCContext &Ctx,
+MCStreamer *createSOFFObjectStreamer(MCContext &Ctx,
                               std::unique_ptr<MCAsmBackend> &&TAB,
                               std::unique_ptr<MCObjectWriter> &&OW,
                               std::unique_ptr<MCCodeEmitter> &&CE);
@@ -540,7 +540,8 @@ public:
       llvm_unreachable("Unknown object format");
     case Triple::SOFF:
       assert(T.isOSSos() && "only SOS SOFF is supported");
-      S = createSOFFStreamer(Ctx, std::move(TAB), std::move(OW), std::move(Emitter));
+      S = createSOFFObjectStreamer(Ctx, std::move(TAB), std::move(OW),
+                                   std::move(Emitter));
       break;
     case Triple::COFF:
       assert(T.isOSWindows() && "only Windows COFF is supported");

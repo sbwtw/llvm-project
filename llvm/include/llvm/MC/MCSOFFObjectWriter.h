@@ -6,28 +6,25 @@
 #define LLVM_MCSOFFOBJECTWRITER_H
 
 #include "llvm/MC/MCObjectWriter.h"
+#include "llvm/MC/MCAssembler.h"
+#include "llvm/MC/MCAsmLayout.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/EndianStream.h"
 
 namespace llvm {
 
-class MCSOFFObjectWriter : public MCObjectWriter {
+class MCSOFFObjectTargetWriter : public MCObjectTargetWriter {
 public:
-  MCSOFFObjectWriter(raw_pwrite_stream &OS);
+  MCSOFFObjectTargetWriter();
 
-  void executePostLayoutBinding(MCAssembler &Asm,
-                                        const MCAsmLayout &Layout) override;
-  void recordRelocation(MCAssembler &Asm, const MCAsmLayout &Layout,
-                                const MCFragment *Fragment,
-                                const MCFixup &Fixup, MCValue Target,
-                                uint64_t &FixedValue) override;
-  uint64_t writeObject(MCAssembler &Asm, const MCAsmLayout &Layout) override;
-
-private:
-  support::endian::Writer W;
+  static bool classof(const MCObjectTargetWriter *W) {
+    return W->getFormat() == Triple::SOFF;
+  }
 };
 
-std::unique_ptr<MCObjectWriter> createSOFFObjectWriter(raw_pwrite_stream &OS);
+std::unique_ptr<MCObjectWriter>
+createSOFFObjectWriter(std::unique_ptr<MCSOFFObjectTargetWriter> MOTW,
+                       raw_pwrite_stream &OS);
 } // namespace llvm
 
 #endif // LLVM_MCSOFFOBJECTWRITER_H
