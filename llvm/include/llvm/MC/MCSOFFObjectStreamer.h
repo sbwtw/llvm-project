@@ -2,16 +2,17 @@
 // Created by sbw on 1/16/22.
 //
 
-#ifndef LLVM_MCSOFFSTREAMER_H
-#define LLVM_MCSOFFSTREAMER_H
+#ifndef LLVM_MCSOFFOBJECTSTREAMER_H
+#define LLVM_MCSOFFOBJECTSTREAMER_H
 
-#include "llvm/MC/MCStreamer.h"
+#include "llvm/MC/MCObjectStreamer.h"
 
 namespace llvm {
-class MCSOFFStreamer : public MCStreamer
+class MCSOFFObjectStreamer : public MCObjectStreamer
 {
 public:
-  MCSOFFStreamer(MCContext &Ctx);
+  MCSOFFObjectStreamer(MCContext &Context, std::unique_ptr<MCAsmBackend> TAB,
+      std::unique_ptr<MCObjectWriter> OW,  std::unique_ptr<MCCodeEmitter> Emitter);
   bool emitSymbolAttribute(MCSymbol *Symbol,
                                  MCSymbolAttr Attribute) override;
   void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
@@ -19,7 +20,8 @@ public:
   void emitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
                         uint64_t Size = 0, unsigned ByteAlignment = 0,
                         SMLoc Loc = SMLoc()) override;
+  void emitInstToData(const MCInst &Inst, const MCSubtargetInfo&) override;
 };
 } // namespace llvm
 
-#endif // LLVM_MCSOFFSTREAMER_H
+#endif // LLVM_MCSOFFOBJECTSTREAMER_H
