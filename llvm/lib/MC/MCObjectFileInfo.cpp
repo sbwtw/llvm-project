@@ -21,6 +21,7 @@
 #include "llvm/MC/MCSectionMachO.h"
 #include "llvm/MC/MCSectionWasm.h"
 #include "llvm/MC/MCSectionXCOFF.h"
+#include "llvm/MC/MCSectionSOFF.h"
 
 using namespace llvm;
 
@@ -982,8 +983,8 @@ void MCObjectFileInfo::initXCOFFMCObjectFileInfo(const Triple &T) {
 }
 
 void MCObjectFileInfo::initSOFFMCObjectFileInfo(const Triple &T) {
-  TextSection = (MCSection *)Ctx->getSOFFSection(".text", SectionKind::getText());
-  DataSection = (MCSection *)Ctx->getSOFFSection(".data", SectionKind::getData());
+  TextSection = Ctx->getSOFFSection(".text", SectionKind::getText());
+  DataSection = Ctx->getSOFFSection(".data", SectionKind::getData());
 }
 
 MCObjectFileInfo::~MCObjectFileInfo() {}
