@@ -650,7 +650,7 @@ namespace llvm {
         bool MultiSymbolsAllowed = false, const char *BeginSymName = nullptr,
         Optional<XCOFF::DwarfSectionSubtypeFlags> DwarfSubtypeFlags = None);
 
-    MCSectionSOFF *getSOFFSection(const Twine &Section, SectionKind K,
+    MCSectionSOFF *getSOFFSection(StringRef Section, SectionKind K,
                                   unsigned Flags = 0);
 
     // Create and save a copy of STI and return a reference to the copy.

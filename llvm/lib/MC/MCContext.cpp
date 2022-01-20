@@ -804,13 +804,13 @@ MCSectionXCOFF *MCContext::getXCOFFSection(
   return Result;
 }
 
-MCSectionSOFF *MCContext::getSOFFSection(const Twine &Section, SectionKind K,
+MCSectionSOFF *MCContext::getSOFFSection(StringRef Section, SectionKind K,
                                          unsigned int Flags) {
-  auto SecKey = std::string();
+  StringRef SecKey;
   if (K.isText())
-    SecKey = "SOFF_Text";
+    SecKey = ".Text";
   else if (K.isData())
-    SecKey = "SOFF_Data";
+    SecKey = ".Data";
   else
     llvm_unreachable("bad section kind");
 

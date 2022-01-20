@@ -42,42 +42,22 @@ void MCSOFFObjectStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
 void MCSOFFObjectStreamer::emitInstToData(const MCInst &Inst,
                                     const MCSubtargetInfo &STI)
 {
-    MCDataFragment *DF = getOrCreateDataFragment();
+  llvm::outs() << "MCSOFFObjectStreamer::emitInstToData\n";
 
-    SmallVector<MCFixup, 4> Fixups;
-    SmallString<256> Code;
-    raw_svector_ostream VecOS(Code);
-    getAssembler().getEmitter().encodeInstruction(Inst, VecOS, Fixups, STI);
+  MCDataFragment *DF = getOrCreateDataFragment();
 
-    // Add the fixups and data.
-    for (auto F : Fixups) {
-      F.setOffset(F.getOffset() + DF->getContents().size());
-      DF->getFixups().push_back(F);
-    }
-    DF->setHasInstructions(STI);
-    DF->getContents().append(Code.begin(), Code.end());
+  SmallVector<MCFixup, 4> Fixups;
+  SmallString<256> Code;
+  raw_svector_ostream VecOS(Code);
+  getAssembler().getEmitter().encodeInstruction(Inst, VecOS, Fixups, STI);
 
-//    MCAssembler &Assembler = getAssembler();
-//    SmallVector<MCFixup, 4> Fixups;
-//    SmallString<256> Code;
-//    raw_svector_ostream VecOS(Code);
-//    Assembler.getEmitter().encodeInstruction(Inst, VecOS, Fixups, STI);
-//
-//    for (auto C : Code)
-//    {
-//      llvm::outs() << format_hex((unsigned char)C, 4) << ' ';
-//    }
-//
-//    if (!Fixups.empty())
-//    {
-//      for (auto F : Fixups)
-//        llvm::outs() << '(' << F.getTargetKind() << ", " << F.getOffset() << ") ";
-//    }
-//
-//    llvm::outs() << '\n';
-
-//    llvm::outs() << "MCSOFFObjectStreamer::emitInstruction" << "\n";
-//    Inst.dump();
+  // Add the fixups and data.
+  for (auto F : Fixups) {
+    F.setOffset(F.getOffset() + DF->getContents().size());
+    DF->getFixups().push_back(F);
+  }
+  DF->setHasInstructions(STI);
+  DF->getContents().append(Code.begin(), Code.end());
 }
 
 namespace llvm {
