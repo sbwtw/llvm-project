@@ -92,6 +92,7 @@ public:
     FI.Offset = Offset;
     FI.Kind = Kind;
     FI.Loc = Loc;
+
     return FI;
   }
 

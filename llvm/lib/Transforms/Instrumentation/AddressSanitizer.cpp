@@ -2141,6 +2141,9 @@ StringRef ModuleAddressSanitizer::getGlobalMetadataSection() const {
   case Triple::XCOFF:
     report_fatal_error(
         "ModuleAddressSanitizer not implemented for object file format");
+  case Triple::SOFF:
+    llvm_unreachable("not implemented");
+    break;
   case Triple::UnknownObjectFormat:
     break;
   }

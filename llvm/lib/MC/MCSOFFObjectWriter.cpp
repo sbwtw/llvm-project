@@ -47,7 +47,15 @@ void SOFFObjectWriter::recordRelocation(MCAssembler &Asm,
                                         const MCFixup &Fixup, MCValue Target,
                                         uint64_t &FixedValue)
 {
-  llvm::outs() << "SOFFObjectWriter::recordRelocation" << " " << Fixup.getOffset() << '\n';
+  uint64_t FragOffset = Layout.getFragmentOffset(Fragment);
+  uint64_t FixupOffset = FragOffset + Fixup.getOffset();
+
+  llvm::outs() << "SOFFObjectWriter::recordRelocation"
+               << " Total Offset = " << FixupOffset
+               << " Frag Offset = " << FragOffset
+               << " Offset = " << Fixup.getOffset()
+               << " Kind = " << Fixup.getKind()
+               << " Loc = " << Fixup.getLoc().getPointer() << '\n';
 }
 
 uint64_t SOFFObjectWriter::writeObject(MCAssembler &Asm,
@@ -63,19 +71,37 @@ uint64_t SOFFObjectWriter::writeObject(MCAssembler &Asm,
     llvm::outs() << "WriteObject Section " << Sec.getName() << '\n';
     for (auto &F : Sec)
     {
-      if (!F.hasInstructions())
-        continue;
+//      if (!F.hasInstructions())
+//      {
+//        llvm::outs() << "Segment " << int(F.getKind()) << " does not have instructions" << '\n';
+//        continue;
+//      }
 
-      llvm::outs() << "WriteObject Fragment " << '\n';
+      if (auto *Align = dyn_cast<MCAlignFragment>(&F)) {
+        llvm::outs() << "Alignment: " << Align->getAlignment() << '\n';
+        llvm::outs() << "Value: " << Align->getValue() << '\n';
+        llvm::outs() << "ValueSize: " << Align->getValueSize() << '\n';
+        llvm::outs() << "hasEmitNops: " << Align->hasEmitNops() << '\n';
+      }
+
+      llvm::outs() << "WriteObject Fragment" << '\n';
       if (const auto *DF = dyn_cast<MCDataFragment>(&F)) {
+        int Cnt = 0;
         for (auto C : DF->getContents())
         {
           llvm::outs() << format_hex((unsigned char)C, 4) << ' ';
+          W.OS.write(C);
+
+          if (Cnt++ % 5 == 4)
+            llvm::outs() << '\n';
         }
+
         llvm::outs() << '\n';
       }
     }
   }
+
+  llvm::outs() << "Write Finished!!!" << '\n';
 
   return 0;
 }

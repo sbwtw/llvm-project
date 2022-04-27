@@ -42,8 +42,6 @@ void MCSOFFObjectStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
 void MCSOFFObjectStreamer::emitInstToData(const MCInst &Inst,
                                     const MCSubtargetInfo &STI)
 {
-  llvm::outs() << "MCSOFFObjectStreamer::emitInstToData\n";
-
   MCDataFragment *DF = getOrCreateDataFragment();
 
   SmallVector<MCFixup, 4> Fixups;
@@ -54,8 +52,10 @@ void MCSOFFObjectStreamer::emitInstToData(const MCInst &Inst,
   // Add the fixups and data.
   for (auto F : Fixups) {
     F.setOffset(F.getOffset() + DF->getContents().size());
+    F.getValue()->dump();
     DF->getFixups().push_back(F);
   }
+
   DF->setHasInstructions(STI);
   DF->getContents().append(Code.begin(), Code.end());
 }
