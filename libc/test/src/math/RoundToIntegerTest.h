@@ -9,17 +9,14 @@
 #ifndef LLVM_LIBC_TEST_SRC_MATH_ROUNDTOINTEGERTEST_H
 #define LLVM_LIBC_TEST_SRC_MATH_ROUNDTOINTEGERTEST_H
 
+#include "src/__support/FPUtil/FEnvImpl.h"
 #include "src/__support/FPUtil/FPBits.h"
 #include "utils/MPFRWrapper/MPFRUtils.h"
+#include "utils/UnitTest/FPMatcher.h"
 #include "utils/UnitTest/Test.h"
 
-#include <math.h>
-#if math_errhandling & MATH_ERRNO
 #include <errno.h>
-#endif
-#if math_errhandling & MATH_ERREXCEPT
-#include "src/__support/FPUtil/FEnvUtils.h"
-#endif
+#include <math.h>
 
 namespace mpfr = __llvm_libc::testing::mpfr;
 
@@ -45,29 +42,17 @@ private:
 
   void test_one_input(RoundToIntegerFunc func, F input, I expected,
                       bool expectError) {
-#if math_errhandling & MATH_ERRNO
     errno = 0;
-#endif
-#if math_errhandling & MATH_ERREXCEPT
     __llvm_libc::fputil::clear_except(FE_ALL_EXCEPT);
-#endif
 
     ASSERT_EQ(func(input), expected);
 
     if (expectError) {
-#if math_errhandling & MATH_ERREXCEPT
-      ASSERT_EQ(__llvm_libc::fputil::test_except(FE_ALL_EXCEPT), FE_INVALID);
-#endif
-#if math_errhandling & MATH_ERRNO
-      ASSERT_EQ(errno, EDOM);
-#endif
+      ASSERT_FP_EXCEPTION(FE_INVALID);
+      ASSERT_MATH_ERRNO(EDOM);
     } else {
-#if math_errhandling & MATH_ERREXCEPT
-      ASSERT_EQ(__llvm_libc::fputil::test_except(FE_ALL_EXCEPT), 0);
-#endif
-#if math_errhandling & MATH_ERRNO
-      ASSERT_EQ(errno, 0);
-#endif
+      ASSERT_FP_EXCEPTION(0);
+      ASSERT_MATH_ERRNO(0);
     }
   }
 
@@ -88,12 +73,12 @@ private:
 
 public:
   void SetUp() override {
-#if math_errhandling & MATH_ERREXCEPT
-    // We will disable all exceptions so that the test will not
-    // crash with SIGFPE. We can still use fetestexcept to check
-    // if the appropriate flag was raised.
-    __llvm_libc::fputil::disable_except(FE_ALL_EXCEPT);
-#endif
+    if (math_errhandling & MATH_ERREXCEPT) {
+      // We will disable all exceptions so that the test will not
+      // crash with SIGFPE. We can still use fetestexcept to check
+      // if the appropriate flag was raised.
+      __llvm_libc::fputil::disable_except(FE_ALL_EXCEPT);
+    }
   }
 
   void do_infinity_and_na_n_test(RoundToIntegerFunc func) {
@@ -141,7 +126,7 @@ public:
 
     F x = F(bits);
     long mpfr_result;
-    bool erangeflag = mpfr::RoundToLong(x, mpfr_result);
+    bool erangeflag = mpfr::round_to_long(x, mpfr_result);
     ASSERT_FALSE(erangeflag);
     test_one_input(func, x, mpfr_result, false);
   }
@@ -163,10 +148,10 @@ public:
       long mpfr_long_result;
       bool erangeflag;
       if (TestModes)
-        erangeflag =
-            mpfr::RoundToLong(x, to_mpfr_rounding_mode(mode), mpfr_long_result);
+        erangeflag = mpfr::round_to_long(x, to_mpfr_rounding_mode(mode),
+                                         mpfr_long_result);
       else
-        erangeflag = mpfr::RoundToLong(x, mpfr_long_result);
+        erangeflag = mpfr::round_to_long(x, mpfr_long_result);
       ASSERT_FALSE(erangeflag);
       I mpfr_result = mpfr_long_result;
       test_one_input(func, x, mpfr_result, false);
@@ -210,13 +195,13 @@ public:
         __llvm_libc::fputil::set_round(m);
         long mpfr_long_result;
         bool erangeflag =
-            mpfr::RoundToLong(x, to_mpfr_rounding_mode(m), mpfr_long_result);
+            mpfr::round_to_long(x, to_mpfr_rounding_mode(m), mpfr_long_result);
         ASSERT_TRUE(erangeflag);
         test_one_input(func, x, INTEGER_MIN, true);
       }
     } else {
       long mpfr_long_result;
-      bool erangeflag = mpfr::RoundToLong(x, mpfr_long_result);
+      bool erangeflag = mpfr::round_to_long(x, mpfr_long_result);
       ASSERT_TRUE(erangeflag);
       test_one_input(func, x, INTEGER_MIN, true);
     }
@@ -280,8 +265,8 @@ public:
       if (TestModes) {
         for (int m : ROUNDING_MODES) {
           long mpfr_long_result;
-          bool erangeflag =
-              mpfr::RoundToLong(x, to_mpfr_rounding_mode(m), mpfr_long_result);
+          bool erangeflag = mpfr::round_to_long(x, to_mpfr_rounding_mode(m),
+                                                mpfr_long_result);
           I mpfr_result = mpfr_long_result;
           __llvm_libc::fputil::set_round(m);
           if (erangeflag)
@@ -291,7 +276,7 @@ public:
         }
       } else {
         long mpfr_long_result;
-        bool erangeflag = mpfr::RoundToLong(x, mpfr_long_result);
+        bool erangeflag = mpfr::round_to_long(x, mpfr_long_result);
         I mpfr_result = mpfr_long_result;
         if (erangeflag)
           test_one_input(func, x, x > 0 ? INTEGER_MAX : INTEGER_MIN, true);

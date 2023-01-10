@@ -12,14 +12,13 @@
 //===----------------------------------------------------------------------===//
 
 #include "PassDetail.h"
-#include "mlir/Analysis/AffineStructures.h"
+#include "mlir/Dialect/Affine/Analysis/AffineStructures.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
-#include "mlir/Dialect/SCF/AffineCanonicalizationUtils.h"
-#include "mlir/Dialect/SCF/Passes.h"
-#include "mlir/Dialect/SCF/SCF.h"
-#include "mlir/Dialect/SCF/Transforms.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/SCF/Transforms/Passes.h"
+#include "mlir/Dialect/SCF/Transforms/Transforms.h"
+#include "mlir/Dialect/SCF/Utils/AffineCanonicalizationUtils.h"
 #include "mlir/Dialect/Utils/StaticValueUtils.h"
 #include "mlir/IR/AffineExpr.h"
 #include "mlir/IR/BlockAndValueMapping.h"
@@ -43,7 +42,7 @@ static void specializeParallelLoopForUnrolling(ParallelOp op) {
     if (!minOp)
       return;
     int64_t minConstant = std::numeric_limits<int64_t>::max();
-    for (AffineExpr expr : minOp.map().getResults()) {
+    for (AffineExpr expr : minOp.getMap().getResults()) {
       if (auto constantIndex = expr.dyn_cast<AffineConstantExpr>())
         minConstant = std::min(minConstant, constantIndex.getValue());
     }
@@ -79,7 +78,7 @@ static void specializeForLoopForUnrolling(ForOp op) {
   if (!minOp)
     return;
   int64_t minConstant = std::numeric_limits<int64_t>::max();
-  for (AffineExpr expr : minOp.map().getResults()) {
+  for (AffineExpr expr : minOp.getMap().getResults()) {
     if (auto constantIndex = expr.dyn_cast<AffineConstantExpr>())
       minConstant = std::min(minConstant, constantIndex.getValue());
   }
@@ -237,29 +236,29 @@ struct ForLoopPeelingPattern : public OpRewritePattern<ForOp> {
 namespace {
 struct ParallelLoopSpecialization
     : public SCFParallelLoopSpecializationBase<ParallelLoopSpecialization> {
-  void runOnFunction() override {
-    getFunction().walk(
+  void runOnOperation() override {
+    getOperation()->walk(
         [](ParallelOp op) { specializeParallelLoopForUnrolling(op); });
   }
 };
 
 struct ForLoopSpecialization
     : public SCFForLoopSpecializationBase<ForLoopSpecialization> {
-  void runOnFunction() override {
-    getFunction().walk([](ForOp op) { specializeForLoopForUnrolling(op); });
+  void runOnOperation() override {
+    getOperation()->walk([](ForOp op) { specializeForLoopForUnrolling(op); });
   }
 };
 
 struct ForLoopPeeling : public SCFForLoopPeelingBase<ForLoopPeeling> {
-  void runOnFunction() override {
-    FuncOp funcOp = getFunction();
-    MLIRContext *ctx = funcOp.getContext();
+  void runOnOperation() override {
+    auto *parentOp = getOperation();
+    MLIRContext *ctx = parentOp->getContext();
     RewritePatternSet patterns(ctx);
     patterns.add<ForLoopPeelingPattern>(ctx, skipPartial);
-    (void)applyPatternsAndFoldGreedily(funcOp, std::move(patterns));
+    (void)applyPatternsAndFoldGreedily(parentOp, std::move(patterns));
 
     // Drop the markers.
-    funcOp.walk([](Operation *op) {
+    parentOp->walk([](Operation *op) {
       op->removeAttr(kPeeledLoopLabel);
       op->removeAttr(kPartialIterationLabel);
     });

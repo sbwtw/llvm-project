@@ -15,6 +15,7 @@
 #include "llvm/Transforms/Utils/LoopVersioning.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/Analysis/InstSimplifyFolder.h"
 #include "llvm/Analysis/LoopAccessAnalysis.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ScalarEvolution.h"
@@ -40,9 +41,8 @@ LoopVersioning::LoopVersioning(const LoopAccessInfo &LAI,
                                ArrayRef<RuntimePointerCheck> Checks, Loop *L,
                                LoopInfo *LI, DominatorTree *DT,
                                ScalarEvolution *SE)
-    : VersionedLoop(L), NonVersionedLoop(nullptr),
-      AliasChecks(Checks.begin(), Checks.end()),
-      Preds(LAI.getPSE().getUnionPredicate()), LAI(LAI), LI(LI), DT(DT),
+    : VersionedLoop(L), AliasChecks(Checks.begin(), Checks.end()),
+      Preds(LAI.getPSE().getPredicate()), LAI(LAI), LI(LI), DT(DT),
       SE(SE) {
 }
 
@@ -70,17 +70,14 @@ void LoopVersioning::versionLoop(
                    "scev.check");
   SCEVRuntimeCheck =
       Exp.expandCodeForPredicate(&Preds, RuntimeCheckBB->getTerminator());
-  auto *CI = dyn_cast<ConstantInt>(SCEVRuntimeCheck);
 
-  // Discard the SCEV runtime check if it is always true.
-  if (CI && CI->isZero())
-    SCEVRuntimeCheck = nullptr;
-
+  IRBuilder<InstSimplifyFolder> Builder(
+      RuntimeCheckBB->getContext(),
+      InstSimplifyFolder(RuntimeCheckBB->getModule()->getDataLayout()));
   if (MemRuntimeCheck && SCEVRuntimeCheck) {
-    RuntimeCheck = BinaryOperator::Create(Instruction::Or, MemRuntimeCheck,
-                                          SCEVRuntimeCheck, "lver.safe");
-    if (auto *I = dyn_cast<Instruction>(RuntimeCheck))
-      I->insertBefore(RuntimeCheckBB->getTerminator());
+    Builder.SetInsertPoint(RuntimeCheckBB->getTerminator());
+    RuntimeCheck =
+        Builder.CreateOr(MemRuntimeCheck, SCEVRuntimeCheck, "lver.safe");
   } else
     RuntimeCheck = MemRuntimeCheck ? MemRuntimeCheck : SCEVRuntimeCheck;
 
@@ -109,8 +106,9 @@ void LoopVersioning::versionLoop(
 
   // Insert the conditional branch based on the result of the memchecks.
   Instruction *OrigTerm = RuntimeCheckBB->getTerminator();
-  BranchInst::Create(NonVersionedLoop->getLoopPreheader(),
-                     VersionedLoop->getLoopPreheader(), RuntimeCheck, OrigTerm);
+  Builder.SetInsertPoint(OrigTerm);
+  Builder.CreateCondBr(RuntimeCheck, NonVersionedLoop->getLoopPreheader(),
+                       VersionedLoop->getLoopPreheader());
   OrigTerm->eraseFromParent();
 
   // The loops merge in the original exit block.  This is now dominated by the
@@ -139,8 +137,10 @@ void LoopVersioning::addPHINodes(
     // See if we have a single-operand PHI with the value defined by the
     // original loop.
     for (auto I = PHIBlock->begin(); (PN = dyn_cast<PHINode>(I)); ++I) {
-      if (PN->getIncomingValue(0) == Inst)
+      if (PN->getIncomingValue(0) == Inst) {
+        SE->forgetValue(PN);
         break;
+      }
     }
     // If not create it.
     if (!PN) {
@@ -278,7 +278,7 @@ bool runImpl(LoopInfo *LI, function_ref<const LoopAccessInfo &(Loop &)> GetLAA,
     const LoopAccessInfo &LAI = GetLAA(*L);
     if (!LAI.hasConvergentOp() &&
         (LAI.getNumRuntimePointerChecks() ||
-         !LAI.getPSE().getUnionPredicate().isAlwaysTrue())) {
+         !LAI.getPSE().getPredicate().isAlwaysTrue())) {
       LoopVersioning LVer(LAI, LAI.getRuntimePointerChecking()->getChecks(), L,
                           LI, DT, SE);
       LVer.versionLoop();

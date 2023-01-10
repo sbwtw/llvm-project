@@ -10,28 +10,33 @@
 #ifndef _LIBCPP___FUNCTIONAL_FUNCTION_H
 #define _LIBCPP___FUNCTIONAL_FUNCTION_H
 
+#include <__assert>
 #include <__config>
-#include <__debug>
 #include <__functional/binary_function.h>
 #include <__functional/invoke.h>
 #include <__functional/unary_function.h>
 #include <__iterator/iterator_traits.h>
+#include <__memory/addressof.h>
 #include <__memory/allocator_traits.h>
 #include <__memory/compressed_pair.h>
 #include <__memory/shared_ptr.h>
+#include <__utility/forward.h>
+#include <__utility/move.h>
+#include <__utility/swap.h>
 #include <exception>
 #include <memory> // TODO: replace with <__memory/__builtin_new_allocator.h>
 #include <type_traits>
-#include <utility>
 
 #if !defined(_LIBCPP_HAS_NO_PRAGMA_SYSTEM_HEADER)
-#pragma GCC system_header
+#  pragma GCC system_header
 #endif
 
 _LIBCPP_BEGIN_NAMESPACE_STD
 
 // bad_function_call
 
+_LIBCPP_DIAGNOSTIC_PUSH
+_LIBCPP_CLANG_DIAGNOSTIC_IGNORED("-Wweak-vtables")
 class _LIBCPP_EXCEPTION_ABI bad_function_call
     : public exception
 {
@@ -49,6 +54,7 @@ public:
     virtual const char* what() const _NOEXCEPT;
 #endif
 };
+_LIBCPP_DIAGNOSTIC_POP
 
 _LIBCPP_NORETURN inline _LIBCPP_INLINE_VISIBILITY
 void __throw_bad_function_call()
@@ -79,7 +85,7 @@ struct __maybe_derive_from_unary_function
 
 template<class _Rp, class _A1>
 struct __maybe_derive_from_unary_function<_Rp(_A1)>
-    : public unary_function<_A1, _Rp>
+    : public __unary_function<_A1, _Rp>
 {
 };
 
@@ -90,7 +96,7 @@ struct __maybe_derive_from_binary_function
 
 template<class _Rp, class _A1, class _A2>
 struct __maybe_derive_from_binary_function<_Rp(_A1, _A2)>
-    : public binary_function<_A1, _A2, _Rp>
+    : public __binary_function<_A1, _A2, _Rp>
 {
 };
 
@@ -360,7 +366,7 @@ const void*
 __func<_Fp, _Alloc, _Rp(_ArgTypes...)>::target(const type_info& __ti) const _NOEXCEPT
 {
     if (__ti == typeid(_Fp))
-        return &__f_.__target();
+        return _VSTD::addressof(__f_.__target());
     return nullptr;
 }
 
@@ -384,9 +390,9 @@ template <class _Rp, class... _ArgTypes> class __value_func<_Rp(_ArgTypes...)>
     typedef __base<_Rp(_ArgTypes...)> __func;
     __func* __f_;
 
-    _LIBCPP_NO_CFI static __func* __as_base(void* p)
+    _LIBCPP_NO_CFI static __func* __as_base(void* __p)
     {
-        return reinterpret_cast<__func*>(p);
+        return reinterpret_cast<__func*>(__p);
     }
 
   public:
@@ -877,7 +883,7 @@ template <class _Rp, class... _ArgTypes> class __policy_func<_Rp(_ArgTypes...)>
 #endif // _LIBCPP_NO_RTTI
 };
 
-#if defined(_LIBCPP_HAS_BLOCKS_RUNTIME) && !defined(_LIBCPP_HAS_OBJC_ARC)
+#if defined(_LIBCPP_HAS_BLOCKS_RUNTIME)
 
 extern "C" void *_Block_copy(const void *);
 extern "C" void _Block_release(const void *);
@@ -892,14 +898,22 @@ class __func<_Rp1(^)(_ArgTypes1...), _Alloc, _Rp(_ArgTypes...)>
 public:
     _LIBCPP_INLINE_VISIBILITY
     explicit __func(__block_type const& __f)
+#ifdef _LIBCPP_HAS_OBJC_ARC
+        : __f_(__f)
+#else
         : __f_(reinterpret_cast<__block_type>(__f ? _Block_copy(__f) : nullptr))
+#endif
     { }
 
     // [TODO] add && to save on a retain
 
     _LIBCPP_INLINE_VISIBILITY
     explicit __func(__block_type __f, const _Alloc& /* unused */)
+#ifdef _LIBCPP_HAS_OBJC_ARC
+        : __f_(__f)
+#else
         : __f_(reinterpret_cast<__block_type>(__f ? _Block_copy(__f) : nullptr))
+#endif
     { }
 
     virtual __base<_Rp(_ArgTypes...)>* __clone() const {
@@ -915,8 +929,10 @@ public:
     }
 
     virtual void destroy() _NOEXCEPT {
+#ifndef _LIBCPP_HAS_OBJC_ARC
         if (__f_)
             _Block_release(__f_);
+#endif
         __f_ = 0;
     }
 
@@ -944,16 +960,14 @@ public:
 #endif // _LIBCPP_NO_RTTI
 };
 
-#endif // _LIBCPP_HAS_EXTENSION_BLOCKS && !_LIBCPP_HAS_OBJC_ARC
+#endif // _LIBCPP_HAS_EXTENSION_BLOCKS
 
 } // namespace __function
 
 template<class _Rp, class ..._ArgTypes>
 class _LIBCPP_TEMPLATE_VIS function<_Rp(_ArgTypes...)>
-#if _LIBCPP_STD_VER <= 17 || !defined(_LIBCPP_ABI_NO_BINDER_BASES)
     : public __function::__maybe_derive_from_unary_function<_Rp(_ArgTypes...)>,
       public __function::__maybe_derive_from_binary_function<_Rp(_ArgTypes...)>
-#endif
 {
 #ifndef _LIBCPP_ABI_OPTIMIZED_FUNCTION
     typedef __function::__value_func<_Rp(_ArgTypes...)> __func;
@@ -1236,7 +1250,7 @@ void
 swap(function<_Rp(_ArgTypes...)>& __x, function<_Rp(_ArgTypes...)>& __y) _NOEXCEPT
 {return __x.swap(__y);}
 
-#else // _LIBCPP_CXX03_LANG
+#elif defined(_LIBCPP_ENABLE_CXX03_FUNCTION)
 
 namespace __function {
 
@@ -1392,7 +1406,7 @@ const void*
 __func<_Fp, _Alloc, _Rp()>::target(const type_info& __ti) const
 {
     if (__ti == typeid(_Fp))
-        return &__f_.first();
+        return _VSTD::addressof(__f_.first());
     return (const void*)0;
 }
 
@@ -1663,7 +1677,7 @@ __func<_Fp, _Alloc, _Rp(_A0, _A1, _A2)>::target_type() const
 
 #endif // _LIBCPP_NO_RTTI
 
-}  // __function
+} // namespace __function
 
 template<class _Rp>
 class _LIBCPP_TEMPLATE_VIS function<_Rp()>
@@ -2802,7 +2816,7 @@ void
 swap(function<_Fp>& __x, function<_Fp>& __y)
 {return __x.swap(__y);}
 
-#endif
+#endif // _LIBCPP_CXX03_LANG
 
 _LIBCPP_END_NAMESPACE_STD
 

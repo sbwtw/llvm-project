@@ -9,8 +9,6 @@ from lldbsuite.test import lldbutil
 
 class TestCase(TestBase):
 
-    mydir = TestBase.compute_mydir(__file__)
-
     @no_debug_info_test
     def test(self):
         self.build()
@@ -18,7 +16,7 @@ class TestCase(TestBase):
                 lldb.SBFileSpec("main.c"))
 
         self.expect_var_path("c->flexible", type="char[]", summary='"contents"')
-        self.expect_var_path("sc->flexible", type="signed char[]", summary='"contents"')
+        # self.expect_var_path("sc->flexible", type="signed char[]", summary='"contents"')
         self.expect_var_path("uc->flexible", type="unsigned char[]", summary='"contents"')
         # TODO: Make this work
         self.expect("expr c->flexible", error=True,

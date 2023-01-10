@@ -580,7 +580,7 @@ constexpr int fail(const int &p) {
   return (&p)[64]; // expected-note {{cannot refer to element 64 of array of 2 elements}}
 }
 static_assert(fail(*(&(&(*(*&(&zs[2] - 1)[0] + 2 - 2))[2])[-1][2] - 2)) == 11, ""); // \
-expected-error {{static_assert expression is not an integral constant expression}} \
+expected-error {{static assertion expression is not an integral constant expression}} \
 expected-note {{in call to 'fail(zs[1][0][1][0])'}}
 
 constexpr int arr[40] = { 1, 2, 3, [8] = 4 };
@@ -1596,8 +1596,13 @@ namespace CompoundLiteral {
   // Matching GCC, file-scope array compound literals initialized by constants
   // are lifetime-extended.
   constexpr int *p = (int*)(int[1]){3}; // expected-warning {{C99}}
-  static_assert(*p == 3, "");
+  static_assert(*p == 3, "");           // expected-error {{static assertion expression is not an integral constant expression}}
+                                        // expected-note@-1 {{subexpression not valid}}
+                                        // expected-note@-3 {{declared here}}
   static_assert((int[2]){1, 2}[1] == 2, ""); // expected-warning {{C99}}
+  // expected-error@-1 {{static assertion expression is not an integral constant expression}}
+  // expected-note@-2 {{subexpression not valid}}
+  // expected-note@-3 {{declared here}}
 
   // Other kinds are not.
   struct X { int a[2]; };
@@ -1907,12 +1912,12 @@ namespace VirtualFromBase {
   static_assert(p->f() == sizeof(X<S1>), "");
   // cxx11-error@-1    {{not an integral constant expression}}
   // cxx11-note@-2     {{call to virtual function}}
-  // cxx20_2b-error@-3 {{static_assert failed}}
+  // cxx20_2b-error@-3 {{static assertion failed}}
 
   // Non-virtual f(), OK.
   constexpr X<X<S2>> xxs2;
   constexpr X<S2> *q = const_cast<X<X<S2>>*>(&xxs2);
-  static_assert(q->f() == sizeof(S2), ""); // cxx20_2b-error {{static_assert failed}}
+  static_assert(q->f() == sizeof(S2), ""); // cxx20_2b-error {{static assertion failed}}
 }
 
 namespace ConstexprConstructorRecovery {
@@ -1939,20 +1944,16 @@ namespace Lifetime {
 
   constexpr int &get(int &&n) { return n; }
   // cxx2b-error@-1 {{non-const lvalue reference to type 'int' cannot bind to a temporary of type 'int'}}
-  // cxx2b-error@-2 {{no return statement in constexpr function}} See PR40598
   constexpr int &&get_rv(int &&n) { return static_cast<int&&>(n); }
   struct S {
     int &&r;
     int &s;
     int t;
-    constexpr S() : r(get_rv(0)), s(get(0)), t(r) {} // expected-note {{read of object outside its lifetime}}
-    constexpr S(int) : r(get_rv(0)), s(get(0)), t(s) {}
-    // cxx2b-warning@-1 {{reference 's' is not yet bound to a value when used here}}
-    // cxx2b-note@-2    {{read of uninitialized object is not allowed in a constant expression}}
-    // cxx11_20-note@-3 {{read of object outside its lifetime}}
+    constexpr S() : r(get_rv(0)), s(get(0)), t(r) {} // cxx11_20-note {{read of object outside its lifetime}}
+    constexpr S(int) : r(get_rv(0)), s(get(0)), t(s) {} // cxx11_20-note {{read of object outside its lifetime}}
   };
-  constexpr int k1 = S().t; // expected-error {{constant expression}} expected-note {{in call}}
-  constexpr int k2 = S(0).t; // expected-error {{constant expression}} expected-note {{in call}}
+  constexpr int k1 = S().t; // expected-error {{constant expression}} cxx11_20-note {{in call}}
+  constexpr int k2 = S(0).t; // expected-error {{constant expression}} cxx11_20-note {{in call}}
 
   struct Q {
     int n = 0;
@@ -2387,9 +2388,11 @@ namespace flexible_array {
   static_assert(b[2].x == 3, "");
   static_assert(b[2].arr[0], ""); // expected-error {{constant expression}} expected-note {{array member without known bound}}
 
-  // If we ever start to accept this, we'll need to ensure we can
-  // constant-evaluate it properly.
-  constexpr A c = {1, 2, 3}; // expected-error {{initialization of flexible array member}}
+  // Flexible array initialization is currently not supported by constant
+  // evaluation. Make sure we emit an error message, for now.
+  constexpr A c = {1, 2, 3}; // expected-error {{constexpr variable 'c' must be initialized by a constant expression}}
+  // expected-note@-1 {{flexible array initialization is not yet supported}}
+  // expected-warning@-2 {{flexible array initialization is a GNU extension}}
 }
 
 void local_constexpr_var() {

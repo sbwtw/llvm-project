@@ -61,11 +61,6 @@ class X86MCAsmInfoGNUCOFF : public MCAsmInfoGNUCOFF {
 public:
   explicit X86MCAsmInfoGNUCOFF(const Triple &Triple);
 };
-
-class X86MCAsmInfoSOSSOFF : public MCAsmInfo {
-public:
-  explicit X86MCAsmInfoSOSSOFF(const Triple &Triple);
-};
 } // namespace llvm
 
 #endif

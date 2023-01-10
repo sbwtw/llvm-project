@@ -585,7 +585,7 @@ semantics.  For example:
       // On error, return the Error value.
       return Err;
     // On success, use MB.
-    return processContent(MB->getBuffer());
+    return processBuffer(MB->getBuffer());
   }
 
 This third form works with any type that can be assigned to from ``T&&``. This
@@ -1263,7 +1263,7 @@ Define your statistic like this:
 
 .. code-block:: c++
 
-  #define DEBUG_TYPE "mypassname"   // This goes before any #includes.
+  #define DEBUG_TYPE "mypassname"   // This goes after any #includes.
   STATISTIC(NumXForms, "The # of times I did stuff");
 
 The ``STATISTIC`` macro defines a static variable, whose name is specified by
@@ -1705,14 +1705,15 @@ the traits class is informed when an element is inserted or removed from the
 list, and ``ilist``\ s are guaranteed to support a constant-time splice
 operation.
 
+An ``ilist`` and an ``iplist`` are ``using`` aliases to one another and the
+latter only currently exists for historical purposes.
+
 These properties are exactly what we want for things like ``Instruction``\ s and
 basic blocks, which is why these are implemented with ``ilist``\ s.
 
 Related classes of interest are explained in the following subsections:
 
 * :ref:`ilist_traits <dss_ilist_traits>`
-
-* :ref:`iplist <dss_iplist>`
 
 * :ref:`llvm/ADT/ilist_node.h <dss_ilist_node>`
 
@@ -1754,19 +1755,8 @@ For example:
 ilist_traits
 ^^^^^^^^^^^^
 
-``ilist_traits<T>`` is ``ilist<T>``'s customization mechanism. ``iplist<T>``
-(and consequently ``ilist<T>``) publicly derive from this traits class.
-
-.. _dss_iplist:
-
-iplist
-^^^^^^
-
-``iplist<T>`` is ``ilist<T>``'s base and as such supports a slightly narrower
-interface.  Notably, inserters from ``T&`` are absent.
-
-``ilist_traits<T>`` is a public base of this class and can be used for a wide
-variety of customizations.
+``ilist_traits<T>`` is ``ilist<T>``'s customization mechanism. ``ilist<T>``
+publicly derives from this traits class.
 
 .. _dss_ilist_node:
 
@@ -2198,10 +2188,9 @@ membership.
 Other Set-Like Container Options
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The STL provides several other options, such as std::multiset and the various
-"hash_set" like containers (whether from C++ TR1 or from the SGI library).  We
-never use hash_set and unordered_set because they are generally very expensive
-(each insertion requires a malloc) and very non-portable.
+The STL provides several other options, such as std::multiset and
+std::unordered_set.  We never use containers like unordered_set because
+they are generally very expensive (each insertion requires a malloc).
 
 std::multiset is useful if you're not interested in elimination of duplicates,
 but has all the drawbacks of :ref:`std::set <dss_set>`.  A sorted vector
@@ -2389,10 +2378,9 @@ operations is logarithmic in the size of the original map.
 Other Map-Like Container Options
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The STL provides several other options, such as std::multimap and the various
-"hash_map" like containers (whether from C++ TR1 or from the SGI library).  We
-never use hash_set and unordered_set because they are generally very expensive
-(each insertion requires a malloc) and very non-portable.
+The STL provides several other options, such as std::multimap and
+std::unordered_map.  We never use containers like unordered_map because
+they are generally very expensive (each insertion requires a malloc).
 
 std::multimap is useful if you want to map a key to multiple values, but has all
 the drawbacks of std::map.  A sorted vector or some other approach is almost
@@ -2400,10 +2388,10 @@ always better.
 
 .. _ds_bit:
 
-Bit storage containers (BitVector, SparseBitVector, CoalescingBitVector)
+Bit storage containers
 ------------------------------------------------------------------------
 
-There are three bit storage containers, and choosing when to use each is
+There are several bit storage containers, and choosing when to use each is
 relatively straightforward.
 
 One additional option is ``std::vector<bool>``: we discourage its use for two

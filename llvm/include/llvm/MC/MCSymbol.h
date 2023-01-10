@@ -14,7 +14,7 @@
 #define LLVM_MC_MCSYMBOL_H
 
 #include "llvm/ADT/PointerIntPair.h"
-#include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/StringMapEntry.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCFragment.h"
@@ -50,7 +50,6 @@ protected:
     SymbolKindMachO,
     SymbolKindWasm,
     SymbolKindXCOFF,
-    SymbolKindSOFF,
   };
 
   /// A symbol can contain an Offset, or Value, or be Common, but never more
@@ -285,8 +284,6 @@ public:
   bool isWasm() const { return Kind == SymbolKindWasm; }
 
   bool isXCOFF() const { return Kind == SymbolKindXCOFF; }
-
-  bool isSOFF() const { return Kind == SymbolKindSOFF; }
 
   /// @}
   /// \name Variable Symbols

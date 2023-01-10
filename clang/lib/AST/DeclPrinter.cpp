@@ -588,7 +588,7 @@ static void printExplicitSpecifier(ExplicitSpecifier ES, llvm::raw_ostream &Out,
   }
   EOut << " ";
   EOut.flush();
-  Out << EOut.str();
+  Out << Proto;
 }
 
 void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
@@ -680,6 +680,10 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
       if (FT->isVariadic()) {
         if (D->getNumParams()) POut << ", ";
         POut << "...";
+      } else if (!D->getNumParams() && !Context.getLangOpts().CPlusPlus) {
+        // The function has a prototype, so it needs to retain the prototype
+        // in C.
+        POut << "void";
       }
     } else if (D->doesThisDeclarationHaveABody() && !D->hasPrototype()) {
       for (unsigned i = 0, e = D->getNumParams(); i != e; ++i) {
@@ -731,7 +735,6 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
         FT->getNoexceptExpr()->printPretty(EOut, nullptr, SubPolicy,
                                            Indentation, "\n", &Context);
         EOut.flush();
-        Proto += EOut.str();
         Proto += ")";
       }
     }
@@ -885,16 +888,22 @@ void DeclPrinter::VisitVarDecl(VarDecl *D) {
     }
   }
 
-  printDeclType(T, D->getName());
+  printDeclType(T, (isa<ParmVarDecl>(D) && Policy.CleanUglifiedParameters &&
+                    D->getIdentifier())
+                       ? D->getIdentifier()->deuglifiedName()
+                       : D->getName());
   Expr *Init = D->getInit();
   if (!Policy.SuppressInitializers && Init) {
     bool ImplicitInit = false;
-    if (CXXConstructExpr *Construct =
-            dyn_cast<CXXConstructExpr>(Init->IgnoreImplicit())) {
+    if (D->isCXXForRangeDecl()) {
+      // FIXME: We should print the range expression instead.
+      ImplicitInit = true;
+    } else if (CXXConstructExpr *Construct =
+                   dyn_cast<CXXConstructExpr>(Init->IgnoreImplicit())) {
       if (D->getInitStyle() == VarDecl::CallInit &&
           !Construct->isListInitialization()) {
         ImplicitInit = Construct->getNumArgs() == 0 ||
-          Construct->getArg(0)->isDefaultArgument();
+                       Construct->getArg(0)->isDefaultArgument();
       }
     }
     if (!ImplicitInit) {
@@ -995,6 +1004,12 @@ void DeclPrinter::VisitCXXRecordDecl(CXXRecordDecl *D) {
             Args = TST->template_arguments();
       printTemplateArguments(
           Args, S->getSpecializedTemplate()->getTemplateParameters());
+    }
+  }
+
+  if (D->hasDefinition()) {
+    if (D->hasAttr<FinalAttr>()) {
+      Out << " final";
     }
   }
 
@@ -1131,8 +1146,12 @@ void DeclPrinter::VisitTemplateDecl(const TemplateDecl *D) {
     else if (TTP->getDeclName())
       Out << ' ';
 
-    if (TTP->getDeclName())
-      Out << TTP->getDeclName();
+    if (TTP->getDeclName()) {
+      if (Policy.CleanUglifiedParameters && TTP->getIdentifier())
+        Out << TTP->getIdentifier()->deuglifiedName();
+      else
+        Out << TTP->getDeclName();
+    }
   } else if (auto *TD = D->getTemplatedDecl())
     Visit(TD);
   else if (const auto *Concept = dyn_cast<ConceptDecl>(D)) {
@@ -1742,8 +1761,12 @@ void DeclPrinter::VisitTemplateTypeParmDecl(const TemplateTypeParmDecl *TTP) {
   else if (TTP->getDeclName())
     Out << ' ';
 
-  if (TTP->getDeclName())
-    Out << TTP->getDeclName();
+  if (TTP->getDeclName()) {
+    if (Policy.CleanUglifiedParameters && TTP->getIdentifier())
+      Out << TTP->getIdentifier()->deuglifiedName();
+    else
+      Out << TTP->getDeclName();
+  }
 
   if (TTP->hasDefaultArgument()) {
     Out << " = ";
@@ -1755,7 +1778,8 @@ void DeclPrinter::VisitNonTypeTemplateParmDecl(
     const NonTypeTemplateParmDecl *NTTP) {
   StringRef Name;
   if (IdentifierInfo *II = NTTP->getIdentifier())
-    Name = II->getName();
+    Name =
+        Policy.CleanUglifiedParameters ? II->deuglifiedName() : II->getName();
   printDeclType(NTTP->getType(), Name, NTTP->isParameterPack());
 
   if (NTTP->hasDefaultArgument()) {

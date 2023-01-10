@@ -38,7 +38,7 @@ public:
   ElementsAttrIndexer(ElementsAttrIndexer &&rhs)
       : isContiguous(rhs.isContiguous), isSplat(rhs.isSplat) {
     if (isContiguous)
-      conState = std::move(rhs.conState);
+      conState = rhs.conState;
     else
       new (&nonConState) NonContiguousState(std::move(rhs.nonConState));
   }
@@ -76,7 +76,8 @@ public:
   }
 
   /// Access the element at the given index.
-  template <typename T> T at(uint64_t index) const {
+  template <typename T>
+  T at(uint64_t index) const {
     if (isSplat)
       index = 0;
     return isContiguous ? conState.at<T>(index) : nonConState.at<T>(index);
@@ -93,7 +94,8 @@ private:
     ContiguousState(const void *firstEltPtr) : firstEltPtr(firstEltPtr) {}
 
     /// Access the element at the given index.
-    template <typename T> const T &at(uint64_t index) const {
+    template <typename T>
+    const T &at(uint64_t index) const {
       return *(reinterpret_cast<const T *>(firstEltPtr) + index);
     }
 
@@ -109,7 +111,7 @@ private:
     /// This allows for all iterator and element types to be completely
     /// type-erased.
     struct OpaqueIteratorBase {
-      virtual ~OpaqueIteratorBase() {}
+      virtual ~OpaqueIteratorBase() = default;
       virtual std::unique_ptr<OpaqueIteratorBase> clone() const = 0;
     };
     /// This class is used to represent the abstract base of an opaque iterator
@@ -171,7 +173,8 @@ private:
     NonContiguousState(NonContiguousState &&other) = default;
 
     /// Access the element at the given index.
-    template <typename T> T at(uint64_t index) const {
+    template <typename T>
+    T at(uint64_t index) const {
       auto *valueIt = static_cast<OpaqueIteratorValueBase<T> *>(iterator.get());
       return valueIt->at(index);
     }

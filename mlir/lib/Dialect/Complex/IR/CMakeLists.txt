@@ -1,4 +1,4 @@
-add_mlir_dialect_library(MLIRComplex
+add_mlir_dialect_library(MLIRComplexDialect
   ComplexOps.cpp
   ComplexDialect.cpp
 
@@ -9,8 +9,8 @@ add_mlir_dialect_library(MLIRComplex
   MLIRComplexOpsIncGen
 
   LINK_LIBS PUBLIC
-  MLIRArithmetic
+  MLIRArithmeticDialect
   MLIRDialect
+  MLIRInferTypeOpInterface
   MLIRIR
-  MLIRStandard
   )

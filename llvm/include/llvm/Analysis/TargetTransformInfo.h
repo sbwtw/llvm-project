@@ -21,13 +21,13 @@
 #ifndef LLVM_ANALYSIS_TARGETTRANSFORMINFO_H
 #define LLVM_ANALYSIS_TARGETTRANSFORMINFO_H
 
+#include "llvm/ADT/SmallBitVector.h"
+#include "llvm/IR/FMF.h"
 #include "llvm/IR/InstrTypes.h"
-#include "llvm/IR/Operator.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/AtomicOrdering.h"
 #include "llvm/Support/BranchProbability.h"
-#include "llvm/Support/DataTypes.h"
 #include "llvm/Support/InstructionCost.h"
 #include <functional>
 #include <utility>
@@ -43,16 +43,15 @@ class BlockFrequencyInfo;
 class DominatorTree;
 class BranchInst;
 class CallBase;
-class ExtractElementInst;
 class Function;
 class GlobalValue;
 class InstCombiner;
 class OptimizationRemarkEmitter;
 class IntrinsicInst;
 class LoadInst;
-class LoopAccessInfo;
 class Loop;
 class LoopInfo;
+class LoopVectorizationLegality;
 class ProfileSummaryInfo;
 class RecurrenceDescriptor;
 class SCEV;
@@ -130,7 +129,8 @@ class IntrinsicCostAttributes {
 public:
   IntrinsicCostAttributes(
       Intrinsic::ID Id, const CallBase &CI,
-      InstructionCost ScalarCost = InstructionCost::getInvalid());
+      InstructionCost ScalarCost = InstructionCost::getInvalid(),
+      bool TypeBasedOnly = false);
 
   IntrinsicCostAttributes(
       Intrinsic::ID Id, Type *RTy, ArrayRef<Type *> Tys,
@@ -160,6 +160,8 @@ public:
 
   bool skipScalarizationCost() const { return ScalarizationCost.isValid(); }
 };
+
+enum class PredicationStyle { None, Data, DataAndControlFlow };
 
 class TargetTransformInfo;
 typedef TargetTransformInfo TTI;
@@ -529,11 +531,15 @@ public:
   bool preferPredicateOverEpilogue(Loop *L, LoopInfo *LI, ScalarEvolution &SE,
                                    AssumptionCache &AC, TargetLibraryInfo *TLI,
                                    DominatorTree *DT,
-                                   const LoopAccessInfo *LAI) const;
+                                   LoopVectorizationLegality *LVL) const;
 
   /// Query the target whether lowering of the llvm.get.active.lane.mask
-  /// intrinsic is supported.
-  bool emitGetActiveLaneMask() const;
+  /// intrinsic is supported and how the mask should be used. A return value
+  /// of PredicationStyle::Data indicates the mask is used as data only,
+  /// whereas PredicationStyle::DataAndControlFlow indicates we should also use
+  /// the mask for control flow in the loop. If unsupported the return value is
+  /// PredicationStyle::None.
+  PredicationStyle emitGetActiveLaneMask() const;
 
   // Parameters that control the loop peeling transformation
   struct PeelingPreferences {
@@ -618,8 +624,8 @@ public:
                              Instruction *I = nullptr) const;
 
   /// Return true if LSR cost of C1 is lower than C1.
-  bool isLSRCostLess(TargetTransformInfo::LSRCost &C1,
-                     TargetTransformInfo::LSRCost &C2) const;
+  bool isLSRCostLess(const TargetTransformInfo::LSRCost &C1,
+                     const TargetTransformInfo::LSRCost &C2) const;
 
   /// Return true if LSR major cost is number of registers. Targets which
   /// implement their own isLSRCostLess and unset number of registers as major
@@ -660,15 +666,35 @@ public:
   /// Return true if the target supports nontemporal load.
   bool isLegalNTLoad(Type *DataType, Align Alignment) const;
 
+  /// \Returns true if the target supports broadcasting a load to a vector of
+  /// type <NumElements x ElementTy>.
+  bool isLegalBroadcastLoad(Type *ElementTy, ElementCount NumElements) const;
+
   /// Return true if the target supports masked scatter.
   bool isLegalMaskedScatter(Type *DataType, Align Alignment) const;
   /// Return true if the target supports masked gather.
   bool isLegalMaskedGather(Type *DataType, Align Alignment) const;
+  /// Return true if the target forces scalarizing of llvm.masked.gather
+  /// intrinsics.
+  bool forceScalarizeMaskedGather(VectorType *Type, Align Alignment) const;
+  /// Return true if the target forces scalarizing of llvm.masked.scatter
+  /// intrinsics.
+  bool forceScalarizeMaskedScatter(VectorType *Type, Align Alignment) const;
 
   /// Return true if the target supports masked compress store.
   bool isLegalMaskedCompressStore(Type *DataType) const;
   /// Return true if the target supports masked expand load.
   bool isLegalMaskedExpandLoad(Type *DataType) const;
+
+  /// Return true if this is an alternating opcode pattern that can be lowered
+  /// to a single instruction on the target. In X86 this is for the addsub
+  /// instruction which corrsponds to a Shuffle + Fadd + FSub pattern in IR.
+  /// This function expectes two opcodes: \p Opcode1 and \p Opcode2 being
+  /// selected by \p OpcodeMask. The mask contains one bit per lane and is a `0`
+  /// when \p Opcode0 is selected and `1` when Opcode1 is selected.
+  /// \p VecTy is the vector type of the instruction to be generated.
+  bool isLegalAltInstr(VectorType *VecTy, unsigned Opcode0, unsigned Opcode1,
+                       const SmallBitVector &OpcodeMask) const;
 
   /// Return true if we should be enabling ordered reductions for the target.
   bool enableOrderedReductions() const;
@@ -722,7 +748,7 @@ public:
   bool isTypeLegal(Type *Ty) const;
 
   /// Returns the estimated number of registers required to represent \p Ty.
-  InstructionCost getRegUsageForType(Type *Ty) const;
+  unsigned getRegUsageForType(Type *Ty) const;
 
   /// Return true if switches should be turned into lookup tables for the
   /// target.
@@ -756,6 +782,9 @@ public:
   /// return true here so that insertion/extraction costs are not added to
   /// the scalarization cost of a load/store.
   bool supportsEfficientVectorElementLoadStore() const;
+
+  /// If the target supports tail calls.
+  bool supportsTailCalls() const;
 
   /// Don't restrict interleaved unrolling to small loops.
   bool enableAggressiveInterleaving(bool LoopHasReductions) const;
@@ -929,7 +958,8 @@ public:
   /// creating vectors that span multiple vector registers.
   /// If false, the vectorization factor will be chosen based on the
   /// size of the widest element type.
-  bool shouldMaximizeVectorBandwidth() const;
+  /// \p K Register Kind for vectorization.
+  bool shouldMaximizeVectorBandwidth(TargetTransformInfo::RegisterKind K) const;
 
   /// \return The minimum vectorization factor for types of given element
   /// bit width, or 0 if there is no minimum VF. The returned value only
@@ -941,6 +971,17 @@ public:
   /// bit width and opcode, or 0 if there is no maximum VF.
   /// Currently only used by the SLP vectorizer.
   unsigned getMaximumVF(unsigned ElemWidth, unsigned Opcode) const;
+
+  /// \return The minimum vectorization factor for the store instruction. Given
+  /// the initial estimation of the minimum vector factor and store value type,
+  /// it tries to find possible lowest VF, which still might be profitable for
+  /// the vectorization.
+  /// \param VF Initial estimation of the minimum vector factor.
+  /// \param ScalarMemTy Scalar memory type of the store operation.
+  /// \param ScalarValTy Scalar type of the stored value.
+  /// Currently only used by the SLP vectorizer.
+  unsigned getStoreMinimumVF(unsigned VF, Type *ScalarMemTy,
+                             Type *ScalarValTy) const;
 
   /// \return True if it should be considered for address type promotion.
   /// \p AllowPromotionWithoutCommonHeader Set true if promoting \p I is
@@ -1040,11 +1081,14 @@ public:
   /// The exact mask may be passed as Mask, or else the array will be empty.
   /// The index and subtype parameters are used by the subvector insertion and
   /// extraction shuffle kinds to show the insert/extract point and the type of
-  /// the subvector being inserted/extracted.
+  /// the subvector being inserted/extracted. The operands of the shuffle can be
+  /// passed through \p Args, which helps improve the cost estimation in some
+  /// cases, like in broadcast loads.
   /// NOTE: For subvector extractions Tp represents the source type.
   InstructionCost getShuffleCost(ShuffleKind Kind, VectorType *Tp,
                                  ArrayRef<int> Mask = None, int Index = 0,
-                                 VectorType *SubTp = nullptr) const;
+                                 VectorType *SubTp = nullptr,
+                                 ArrayRef<const Value *> Args = None) const;
 
   /// Represents a hint about the context in which a cast is used.
   ///
@@ -1278,9 +1322,11 @@ public:
                                            Type *ExpectedType) const;
 
   /// \returns The type to use in a loop expansion of a memcpy call.
-  Type *getMemcpyLoopLoweringType(LLVMContext &Context, Value *Length,
-                                  unsigned SrcAddrSpace, unsigned DestAddrSpace,
-                                  unsigned SrcAlign, unsigned DestAlign) const;
+  Type *
+  getMemcpyLoopLoweringType(LLVMContext &Context, Value *Length,
+                            unsigned SrcAddrSpace, unsigned DestAddrSpace,
+                            unsigned SrcAlign, unsigned DestAlign,
+                            Optional<uint32_t> AtomicElementSize = None) const;
 
   /// \param[out] OpsOut The operand types to copy RemainingBytes of memory.
   /// \param RemainingBytes The number of bytes to copy.
@@ -1291,7 +1337,8 @@ public:
   void getMemcpyLoopResidualLoweringType(
       SmallVectorImpl<Type *> &OpsOut, LLVMContext &Context,
       unsigned RemainingBytes, unsigned SrcAddrSpace, unsigned DestAddrSpace,
-      unsigned SrcAlign, unsigned DestAlign) const;
+      unsigned SrcAlign, unsigned DestAlign,
+      Optional<uint32_t> AtomicCpySize = None) const;
 
   /// \returns True if the two functions have compatible attributes for inlining
   /// purposes.
@@ -1359,10 +1406,12 @@ public:
 
   /// Flags describing the kind of vector reduction.
   struct ReductionFlags {
-    ReductionFlags() : IsMaxOp(false), IsSigned(false), NoNaN(false) {}
-    bool IsMaxOp;  ///< If the op a min/max kind, true if it's a max operation.
-    bool IsSigned; ///< Whether the operation is a signed int reduction.
-    bool NoNaN;    ///< If op is an fp min/max, whether NaNs may be present.
+    ReductionFlags() = default;
+    bool IsMaxOp =
+        false; ///< If the op a min/max kind, true if it's a max operation.
+    bool IsSigned = false; ///< Whether the operation is a signed int reduction.
+    bool NoNaN =
+        false; ///< If op is an fp min/max, whether NaNs may be present.
   };
 
   /// \returns True if the target prefers reductions in loop.
@@ -1390,6 +1439,10 @@ public:
   /// \returns the size cost of rematerializing a GlobalValue address relative
   /// to a stack reload.
   unsigned getGISelRematGlobalCost() const;
+
+  /// \returns the lower bound of a trip count to decide on vectorization
+  /// while tail-folding.
+  unsigned getMinTripCountTailFoldingThreshold() const;
 
   /// \returns True if the target supports scalable vectors.
   bool supportsScalableVectors() const;
@@ -1507,11 +1560,13 @@ public:
                                         AssumptionCache &AC,
                                         TargetLibraryInfo *LibInfo,
                                         HardwareLoopInfo &HWLoopInfo) = 0;
-  virtual bool
-  preferPredicateOverEpilogue(Loop *L, LoopInfo *LI, ScalarEvolution &SE,
-                              AssumptionCache &AC, TargetLibraryInfo *TLI,
-                              DominatorTree *DT, const LoopAccessInfo *LAI) = 0;
-  virtual bool emitGetActiveLaneMask() = 0;
+  virtual bool preferPredicateOverEpilogue(Loop *L, LoopInfo *LI,
+                                           ScalarEvolution &SE,
+                                           AssumptionCache &AC,
+                                           TargetLibraryInfo *TLI,
+                                           DominatorTree *DT,
+                                           LoopVectorizationLegality *LVL) = 0;
+  virtual PredicationStyle emitGetActiveLaneMask() = 0;
   virtual Optional<Instruction *> instCombineIntrinsic(InstCombiner &IC,
                                                        IntrinsicInst &II) = 0;
   virtual Optional<Value *>
@@ -1529,8 +1584,8 @@ public:
                                      int64_t BaseOffset, bool HasBaseReg,
                                      int64_t Scale, unsigned AddrSpace,
                                      Instruction *I) = 0;
-  virtual bool isLSRCostLess(TargetTransformInfo::LSRCost &C1,
-                             TargetTransformInfo::LSRCost &C2) = 0;
+  virtual bool isLSRCostLess(const TargetTransformInfo::LSRCost &C1,
+                             const TargetTransformInfo::LSRCost &C2) = 0;
   virtual bool isNumRegsMajorCostOfLSR() = 0;
   virtual bool isProfitableLSRChainElement(Instruction *I) = 0;
   virtual bool canMacroFuseCmp() = 0;
@@ -1543,10 +1598,19 @@ public:
   virtual bool isLegalMaskedLoad(Type *DataType, Align Alignment) = 0;
   virtual bool isLegalNTStore(Type *DataType, Align Alignment) = 0;
   virtual bool isLegalNTLoad(Type *DataType, Align Alignment) = 0;
+  virtual bool isLegalBroadcastLoad(Type *ElementTy,
+                                    ElementCount NumElements) const = 0;
   virtual bool isLegalMaskedScatter(Type *DataType, Align Alignment) = 0;
   virtual bool isLegalMaskedGather(Type *DataType, Align Alignment) = 0;
+  virtual bool forceScalarizeMaskedGather(VectorType *DataType,
+                                          Align Alignment) = 0;
+  virtual bool forceScalarizeMaskedScatter(VectorType *DataType,
+                                           Align Alignment) = 0;
   virtual bool isLegalMaskedCompressStore(Type *DataType) = 0;
   virtual bool isLegalMaskedExpandLoad(Type *DataType) = 0;
+  virtual bool isLegalAltInstr(VectorType *VecTy, unsigned Opcode0,
+                               unsigned Opcode1,
+                               const SmallBitVector &OpcodeMask) const = 0;
   virtual bool enableOrderedReductions() = 0;
   virtual bool hasDivRemOp(Type *DataType, bool IsSigned) = 0;
   virtual bool hasVolatileVariant(Instruction *I, unsigned AddrSpace) = 0;
@@ -1560,7 +1624,7 @@ public:
   virtual bool isProfitableToHoist(Instruction *I) = 0;
   virtual bool useAA() = 0;
   virtual bool isTypeLegal(Type *Ty) = 0;
-  virtual InstructionCost getRegUsageForType(Type *Ty) = 0;
+  virtual unsigned getRegUsageForType(Type *Ty) = 0;
   virtual bool shouldBuildLookupTables() = 0;
   virtual bool shouldBuildLookupTablesForConstant(Constant *C) = 0;
   virtual bool shouldBuildRelLookupTables() = 0;
@@ -1573,6 +1637,7 @@ public:
   getOperandsScalarizationOverhead(ArrayRef<const Value *> Args,
                                    ArrayRef<Type *> Tys) = 0;
   virtual bool supportsEfficientVectorElementLoadStore() = 0;
+  virtual bool supportsTailCalls() = 0;
   virtual bool enableAggressiveInterleaving(bool LoopHasReductions) = 0;
   virtual MemCmpExpansionOptions
   enableMemCmpExpansion(bool OptSize, bool IsZeroCmp) const = 0;
@@ -1607,10 +1672,13 @@ public:
   virtual unsigned getMinVectorRegisterBitWidth() const = 0;
   virtual Optional<unsigned> getMaxVScale() const = 0;
   virtual Optional<unsigned> getVScaleForTuning() const = 0;
-  virtual bool shouldMaximizeVectorBandwidth() const = 0;
+  virtual bool
+  shouldMaximizeVectorBandwidth(TargetTransformInfo::RegisterKind K) const = 0;
   virtual ElementCount getMinimumVF(unsigned ElemWidth,
                                     bool IsScalable) const = 0;
   virtual unsigned getMaximumVF(unsigned ElemWidth, unsigned Opcode) const = 0;
+  virtual unsigned getStoreMinimumVF(unsigned VF, Type *ScalarMemTy,
+                                     Type *ScalarValTy) const = 0;
   virtual bool shouldConsiderAddressTypePromotion(
       const Instruction &I, bool &AllowPromotionWithoutCommonHeader) = 0;
   virtual unsigned getCacheLineSize() const = 0;
@@ -1649,7 +1717,8 @@ public:
       ArrayRef<const Value *> Args, const Instruction *CxtI = nullptr) = 0;
   virtual InstructionCost getShuffleCost(ShuffleKind Kind, VectorType *Tp,
                                          ArrayRef<int> Mask, int Index,
-                                         VectorType *SubTp) = 0;
+                                         VectorType *SubTp,
+                                         ArrayRef<const Value *> Args) = 0;
   virtual InstructionCost getCastInstrCost(unsigned Opcode, Type *Dst,
                                            Type *Src, CastContextHint CCH,
                                            TTI::TargetCostKind CostKind,
@@ -1723,15 +1792,17 @@ public:
   virtual unsigned getAtomicMemIntrinsicMaxElementSize() const = 0;
   virtual Value *getOrCreateResultFromMemIntrinsic(IntrinsicInst *Inst,
                                                    Type *ExpectedType) = 0;
-  virtual Type *getMemcpyLoopLoweringType(LLVMContext &Context, Value *Length,
-                                          unsigned SrcAddrSpace,
-                                          unsigned DestAddrSpace,
-                                          unsigned SrcAlign,
-                                          unsigned DestAlign) const = 0;
+  virtual Type *
+  getMemcpyLoopLoweringType(LLVMContext &Context, Value *Length,
+                            unsigned SrcAddrSpace, unsigned DestAddrSpace,
+                            unsigned SrcAlign, unsigned DestAlign,
+                            Optional<uint32_t> AtomicElementSize) const = 0;
+
   virtual void getMemcpyLoopResidualLoweringType(
       SmallVectorImpl<Type *> &OpsOut, LLVMContext &Context,
       unsigned RemainingBytes, unsigned SrcAddrSpace, unsigned DestAddrSpace,
-      unsigned SrcAlign, unsigned DestAlign) const = 0;
+      unsigned SrcAlign, unsigned DestAlign,
+      Optional<uint32_t> AtomicCpySize) const = 0;
   virtual bool areInlineCompatible(const Function *Caller,
                                    const Function *Callee) const = 0;
   virtual bool areTypesABICompatible(const Function *Caller,
@@ -1763,6 +1834,7 @@ public:
                                                ReductionFlags) const = 0;
   virtual bool shouldExpandReduction(const IntrinsicInst *II) const = 0;
   virtual unsigned getGISelRematGlobalCost() const = 0;
+  virtual unsigned getMinTripCountTailFoldingThreshold() const = 0;
   virtual bool enableScalableVectorization() const = 0;
   virtual bool supportsScalableVectors() const = 0;
   virtual bool hasActiveVectorLength(unsigned Opcode, Type *DataType,
@@ -1778,7 +1850,7 @@ class TargetTransformInfo::Model final : public TargetTransformInfo::Concept {
 
 public:
   Model(T Impl) : Impl(std::move(Impl)) {}
-  ~Model() override {}
+  ~Model() override = default;
 
   const DataLayout &getDataLayout() const override {
     return Impl.getDataLayout();
@@ -1871,10 +1943,10 @@ public:
   bool preferPredicateOverEpilogue(Loop *L, LoopInfo *LI, ScalarEvolution &SE,
                                    AssumptionCache &AC, TargetLibraryInfo *TLI,
                                    DominatorTree *DT,
-                                   const LoopAccessInfo *LAI) override {
-    return Impl.preferPredicateOverEpilogue(L, LI, SE, AC, TLI, DT, LAI);
+                                   LoopVectorizationLegality *LVL) override {
+    return Impl.preferPredicateOverEpilogue(L, LI, SE, AC, TLI, DT, LVL);
   }
-  bool emitGetActiveLaneMask() override {
+  PredicationStyle emitGetActiveLaneMask() override {
     return Impl.emitGetActiveLaneMask();
   }
   Optional<Instruction *> instCombineIntrinsic(InstCombiner &IC,
@@ -1909,8 +1981,8 @@ public:
     return Impl.isLegalAddressingMode(Ty, BaseGV, BaseOffset, HasBaseReg, Scale,
                                       AddrSpace, I);
   }
-  bool isLSRCostLess(TargetTransformInfo::LSRCost &C1,
-                     TargetTransformInfo::LSRCost &C2) override {
+  bool isLSRCostLess(const TargetTransformInfo::LSRCost &C1,
+                     const TargetTransformInfo::LSRCost &C2) override {
     return Impl.isLSRCostLess(C1, C2);
   }
   bool isNumRegsMajorCostOfLSR() override {
@@ -1942,17 +2014,33 @@ public:
   bool isLegalNTLoad(Type *DataType, Align Alignment) override {
     return Impl.isLegalNTLoad(DataType, Alignment);
   }
+  bool isLegalBroadcastLoad(Type *ElementTy,
+                            ElementCount NumElements) const override {
+    return Impl.isLegalBroadcastLoad(ElementTy, NumElements);
+  }
   bool isLegalMaskedScatter(Type *DataType, Align Alignment) override {
     return Impl.isLegalMaskedScatter(DataType, Alignment);
   }
   bool isLegalMaskedGather(Type *DataType, Align Alignment) override {
     return Impl.isLegalMaskedGather(DataType, Alignment);
   }
+  bool forceScalarizeMaskedGather(VectorType *DataType,
+                                  Align Alignment) override {
+    return Impl.forceScalarizeMaskedGather(DataType, Alignment);
+  }
+  bool forceScalarizeMaskedScatter(VectorType *DataType,
+                                   Align Alignment) override {
+    return Impl.forceScalarizeMaskedScatter(DataType, Alignment);
+  }
   bool isLegalMaskedCompressStore(Type *DataType) override {
     return Impl.isLegalMaskedCompressStore(DataType);
   }
   bool isLegalMaskedExpandLoad(Type *DataType) override {
     return Impl.isLegalMaskedExpandLoad(DataType);
+  }
+  bool isLegalAltInstr(VectorType *VecTy, unsigned Opcode0, unsigned Opcode1,
+                       const SmallBitVector &OpcodeMask) const override {
+    return Impl.isLegalAltInstr(VecTy, Opcode0, Opcode1, OpcodeMask);
   }
   bool enableOrderedReductions() override {
     return Impl.enableOrderedReductions();
@@ -1982,7 +2070,7 @@ public:
   }
   bool useAA() override { return Impl.useAA(); }
   bool isTypeLegal(Type *Ty) override { return Impl.isTypeLegal(Ty); }
-  InstructionCost getRegUsageForType(Type *Ty) override {
+  unsigned getRegUsageForType(Type *Ty) override {
     return Impl.getRegUsageForType(Ty);
   }
   bool shouldBuildLookupTables() override {
@@ -2012,6 +2100,8 @@ public:
   bool supportsEfficientVectorElementLoadStore() override {
     return Impl.supportsEfficientVectorElementLoadStore();
   }
+
+  bool supportsTailCalls() override { return Impl.supportsTailCalls(); }
 
   bool enableAggressiveInterleaving(bool LoopHasReductions) override {
     return Impl.enableAggressiveInterleaving(LoopHasReductions);
@@ -2089,8 +2179,9 @@ public:
   Optional<unsigned> getVScaleForTuning() const override {
     return Impl.getVScaleForTuning();
   }
-  bool shouldMaximizeVectorBandwidth() const override {
-    return Impl.shouldMaximizeVectorBandwidth();
+  bool shouldMaximizeVectorBandwidth(
+      TargetTransformInfo::RegisterKind K) const override {
+    return Impl.shouldMaximizeVectorBandwidth(K);
   }
   ElementCount getMinimumVF(unsigned ElemWidth,
                             bool IsScalable) const override {
@@ -2098,6 +2189,10 @@ public:
   }
   unsigned getMaximumVF(unsigned ElemWidth, unsigned Opcode) const override {
     return Impl.getMaximumVF(ElemWidth, Opcode);
+  }
+  unsigned getStoreMinimumVF(unsigned VF, Type *ScalarMemTy,
+                             Type *ScalarValTy) const override {
+    return Impl.getStoreMinimumVF(VF, ScalarMemTy, ScalarValTy);
   }
   bool shouldConsiderAddressTypePromotion(
       const Instruction &I, bool &AllowPromotionWithoutCommonHeader) override {
@@ -2161,8 +2256,9 @@ public:
   }
   InstructionCost getShuffleCost(ShuffleKind Kind, VectorType *Tp,
                                  ArrayRef<int> Mask, int Index,
-                                 VectorType *SubTp) override {
-    return Impl.getShuffleCost(Kind, Tp, Mask, Index, SubTp);
+                                 VectorType *SubTp,
+                                 ArrayRef<const Value *> Args) override {
+    return Impl.getShuffleCost(Kind, Tp, Mask, Index, SubTp, Args);
   }
   InstructionCost getCastInstrCost(unsigned Opcode, Type *Dst, Type *Src,
                                    CastContextHint CCH,
@@ -2279,20 +2375,22 @@ public:
                                            Type *ExpectedType) override {
     return Impl.getOrCreateResultFromMemIntrinsic(Inst, ExpectedType);
   }
-  Type *getMemcpyLoopLoweringType(LLVMContext &Context, Value *Length,
-                                  unsigned SrcAddrSpace, unsigned DestAddrSpace,
-                                  unsigned SrcAlign,
-                                  unsigned DestAlign) const override {
+  Type *getMemcpyLoopLoweringType(
+      LLVMContext &Context, Value *Length, unsigned SrcAddrSpace,
+      unsigned DestAddrSpace, unsigned SrcAlign, unsigned DestAlign,
+      Optional<uint32_t> AtomicElementSize) const override {
     return Impl.getMemcpyLoopLoweringType(Context, Length, SrcAddrSpace,
-                                          DestAddrSpace, SrcAlign, DestAlign);
+                                          DestAddrSpace, SrcAlign, DestAlign,
+                                          AtomicElementSize);
   }
   void getMemcpyLoopResidualLoweringType(
       SmallVectorImpl<Type *> &OpsOut, LLVMContext &Context,
       unsigned RemainingBytes, unsigned SrcAddrSpace, unsigned DestAddrSpace,
-      unsigned SrcAlign, unsigned DestAlign) const override {
+      unsigned SrcAlign, unsigned DestAlign,
+      Optional<uint32_t> AtomicCpySize) const override {
     Impl.getMemcpyLoopResidualLoweringType(OpsOut, Context, RemainingBytes,
                                            SrcAddrSpace, DestAddrSpace,
-                                           SrcAlign, DestAlign);
+                                           SrcAlign, DestAlign, AtomicCpySize);
   }
   bool areInlineCompatible(const Function *Caller,
                            const Function *Callee) const override {
@@ -2358,6 +2456,10 @@ public:
 
   unsigned getGISelRematGlobalCost() const override {
     return Impl.getGISelRematGlobalCost();
+  }
+
+  unsigned getMinTripCountTailFoldingThreshold() const override {
+    return Impl.getMinTripCountTailFoldingThreshold();
   }
 
   bool supportsScalableVectors() const override {
