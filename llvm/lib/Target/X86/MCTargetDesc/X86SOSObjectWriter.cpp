@@ -17,6 +17,6 @@ Triple::ObjectFormatType X86SOSObjectWriter::getFormat() const {
   return Triple::SOFF;
 }
 
-std::unique_ptr<MCObjectTargetWriter> llvm::createX86SOSObjectWriter() {
-  return std::make_unique<X86SOSObjectWriter>();
-}
+// std::unique_ptr<MCObjectTargetWriter> llvm::createX86SOSObjectWriter() {
+//   return std::make_unique<X86SOSObjectWriter>();
+// }

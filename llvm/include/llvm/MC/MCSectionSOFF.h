@@ -12,10 +12,10 @@ class MCSectionSOFF final : public MCSection
 {
 public:
   MCSectionSOFF(StringRef Name, SectionKind K, MCSymbol *Begin);
-  void PrintSwitchToSection(const MCAsmInfo &MAI, const Triple &T,
+  void printSwitchToSection(const MCAsmInfo &MAI, const Triple &T,
                                     raw_ostream &OS,
                                     const MCExpr *Subsection) const override;
-  bool UseCodeAlign() const override;
+  bool useCodeAlign() const override;
   bool isVirtualSection() const override;
 };
 } // namespace llvm

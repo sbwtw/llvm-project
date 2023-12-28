@@ -87,7 +87,8 @@ public:
     IsSPIRV,
     IsWasm,
     IsXCOFF,
-    IsDXContainer
+    IsDXContainer,
+    IsSOFF,
   };
 
 private:

@@ -4926,6 +4926,9 @@ static const char *getSectionNameForBitcode(const Triple &T) {
   case Triple::DXContainer:
     llvm_unreachable("DXContainer is not yet implemented");
     break;
+  case Triple::SOFF:
+    llvm_unreachable("SOFF is not yet implemented");
+    break;
   }
   llvm_unreachable("Unimplemented ObjectFormatType");
 }

@@ -24,6 +24,7 @@
 #include "llvm/ADT/Triple.h"
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/MC/MCObjectFileInfo.h"
+#include "llvm/MC/MCSOFFObjectStreamer.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FormattedStream.h"
@@ -167,15 +168,17 @@ public:
   // If it weren't for layering issues (this header is in llvm/Support, but
   // depends on MC?) this should take the Streamer by value rather than rvalue
   // reference.
-  using AsmPrinterCtorTy = AsmPrinter *(*)(
-      TargetMachine &TM, std::unique_ptr<MCStreamer> &&Streamer);
+  using AsmPrinterCtorTy =
+      AsmPrinter *(*)(TargetMachine &TM,
+                      std::unique_ptr<MCStreamer> &&Streamer);
   using MCAsmBackendCtorTy = MCAsmBackend *(*)(const Target &T,
                                                const MCSubtargetInfo &STI,
                                                const MCRegisterInfo &MRI,
                                                const MCTargetOptions &Options);
-  using MCAsmParserCtorTy = MCTargetAsmParser *(*)(
-      const MCSubtargetInfo &STI, MCAsmParser &P, const MCInstrInfo &MII,
-      const MCTargetOptions &Options);
+  using MCAsmParserCtorTy =
+      MCTargetAsmParser *(*)(const MCSubtargetInfo &STI, MCAsmParser &P,
+                             const MCInstrInfo &MII,
+                             const MCTargetOptions &Options);
   using MCDisassemblerCtorTy = MCDisassembler *(*)(const Target &T,
                                                    const MCSubtargetInfo &STI,
                                                    MCContext &Ctx);
@@ -216,7 +219,7 @@ public:
                       std::unique_ptr<MCAsmBackend> &&TAB,
                       std::unique_ptr<MCObjectWriter> &&OW,
                       std::unique_ptr<MCCodeEmitter> &&Emitter, bool RelaxAll);
-  
+
   using DXContainerStreamerCtorTy =
       MCStreamer *(*)(const Triple &T, MCContext &Ctx,
                       std::unique_ptr<MCAsmBackend> &&TAB,
@@ -224,17 +227,18 @@ public:
                       std::unique_ptr<MCCodeEmitter> &&Emitter, bool RelaxAll);
 
   using NullTargetStreamerCtorTy = MCTargetStreamer *(*)(MCStreamer &S);
-  using AsmTargetStreamerCtorTy = MCTargetStreamer *(*)(
-      MCStreamer &S, formatted_raw_ostream &OS, MCInstPrinter *InstPrint,
-      bool IsVerboseAsm);
-  using ObjectTargetStreamerCtorTy = MCTargetStreamer *(*)(
-      MCStreamer &S, const MCSubtargetInfo &STI);
+  using AsmTargetStreamerCtorTy =
+      MCTargetStreamer *(*)(MCStreamer &S, formatted_raw_ostream &OS,
+                            MCInstPrinter *InstPrint, bool IsVerboseAsm);
+  using ObjectTargetStreamerCtorTy =
+      MCTargetStreamer *(*)(MCStreamer &S, const MCSubtargetInfo &STI);
   using MCRelocationInfoCtorTy = MCRelocationInfo *(*)(const Triple &TT,
                                                        MCContext &Ctx);
-  using MCSymbolizerCtorTy = MCSymbolizer *(*)(
-      const Triple &TT, LLVMOpInfoCallback GetOpInfo,
-      LLVMSymbolLookupCallback SymbolLookUp, void *DisInfo, MCContext *Ctx,
-      std::unique_ptr<MCRelocationInfo> &&RelInfo);
+  using MCSymbolizerCtorTy =
+      MCSymbolizer *(*)(const Triple &TT, LLVMOpInfoCallback GetOpInfo,
+                        LLVMSymbolLookupCallback SymbolLookUp, void *DisInfo,
+                        MCContext *Ctx,
+                        std::unique_ptr<MCRelocationInfo> &&RelInfo);
 
   using CustomBehaviourCtorTy =
       mca::CustomBehaviour *(*)(const MCSubtargetInfo &STI,
@@ -606,11 +610,14 @@ public:
     case Triple::DXContainer:
       if (DXContainerStreamerCtorFn)
         S = DXContainerStreamerCtorFn(T, Ctx, std::move(TAB), std::move(OW),
-                              std::move(Emitter), RelaxAll);
+                                      std::move(Emitter), RelaxAll);
       else
         S = createDXContainerStreamer(Ctx, std::move(TAB), std::move(OW),
                                       std::move(Emitter), RelaxAll);
       break;
+    case Triple::SOFF:
+      S = createSOFFObjectStreamer(Ctx, std::move(TAB), std::move(OW),
+                                   std::move(Emitter));
     }
     if (ObjectTargetStreamerCtorFn)
       ObjectTargetStreamerCtorFn(*S, STI);
@@ -995,7 +1002,8 @@ struct TargetRegistry {
     T.SPIRVStreamerCtorFn = Fn;
   }
 
-  static void RegisterDXContainerStreamer(Target &T, Target::DXContainerStreamerCtorTy Fn) {
+  static void
+  RegisterDXContainerStreamer(Target &T, Target::DXContainerStreamerCtorTy Fn) {
     T.DXContainerStreamerCtorFn = Fn;
   }
 

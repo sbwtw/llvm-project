@@ -11,12 +11,12 @@ MCSectionSOFF::MCSectionSOFF(StringRef Name, SectionKind K, MCSymbol *Begin)
 {
 }
 
-void MCSectionSOFF::PrintSwitchToSection(
+void MCSectionSOFF::printSwitchToSection(
     const MCAsmInfo &MAI, const Triple &T, raw_ostream &OS,
     const MCExpr *Subsection) const
 {
 }
 
-bool MCSectionSOFF::UseCodeAlign() const { return false; }
+bool MCSectionSOFF::useCodeAlign() const { return false; }
 
 bool MCSectionSOFF::isVirtualSection() const { return false; }

@@ -3,45 +3,40 @@
 //
 
 #include "llvm/MC/MCSOFFObjectStreamer.h"
+#include "llvm/MC/MCAsmBackend.h"
+#include "llvm/MC/MCAssembler.h"
+#include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCSection.h"
-#include "llvm/MC/MCAsmBackend.h"
-#include "llvm/MC/MCCodeEmitter.h"
-#include "llvm/Support/Format.h"
 
 using namespace llvm;
 
-MCSOFFObjectStreamer::MCSOFFObjectStreamer(MCContext &Context,
-                               std::unique_ptr<MCAsmBackend> TAB,
-                               std::unique_ptr<MCObjectWriter> OW,
-                               std::unique_ptr<MCCodeEmitter> Emitter)
-    : MCObjectStreamer(Context, std::move(TAB), std::move(OW), std::move(Emitter))
-{
-
-}
+MCSOFFObjectStreamer::MCSOFFObjectStreamer(
+    MCContext &Context, std::unique_ptr<MCAsmBackend> TAB,
+    std::unique_ptr<MCObjectWriter> OW, std::unique_ptr<MCCodeEmitter> Emitter)
+    : MCObjectStreamer(Context, std::move(TAB), std::move(OW),
+                       std::move(Emitter)) {}
 
 bool MCSOFFObjectStreamer::emitSymbolAttribute(MCSymbol *Symbol,
-                                         MCSymbolAttr Attribute)
-{
+                                               MCSymbolAttr Attribute) {
   return false;
 }
 
 void MCSOFFObjectStreamer::emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                                      unsigned int ByteAlignment)
-{
-  llvm::outs() << "MCSOFFObjectStreamer::emitCommonSymbol" << Symbol->getName() << "\n";
+                                            unsigned int ByteAlignment) {
+  llvm::outs() << "MCSOFFObjectStreamer::emitCommonSymbol" << Symbol->getName()
+               << "\n";
 }
 
 void MCSOFFObjectStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
-                                  uint64_t Size, unsigned int ByteAlignment,
-                                  SMLoc Loc)
-{
-  llvm::outs() << "MCSOFFObjectStreamer::emitZerofill" << Section->getName() << ", " << Symbol->getName() << "\n";
+                                        uint64_t Size,
+                                        unsigned int ByteAlignment, SMLoc Loc) {
+  llvm::outs() << "MCSOFFObjectStreamer::emitZerofill" << Section->getName()
+               << ", " << Symbol->getName() << "\n";
 }
 
 void MCSOFFObjectStreamer::emitInstToData(const MCInst &Inst,
-                                    const MCSubtargetInfo &STI)
-{
+                                          const MCSubtargetInfo &STI) {
   llvm::outs() << "MCSOFFObjectStreamer::emitInstToData\n";
 
   MCDataFragment *DF = getOrCreateDataFragment();
@@ -62,10 +57,10 @@ void MCSOFFObjectStreamer::emitInstToData(const MCInst &Inst,
 
 namespace llvm {
 MCStreamer *createSOFFObjectStreamer(MCContext &Ctx,
-                               std::unique_ptr<MCAsmBackend> &&TAB,
-                               std::unique_ptr<MCObjectWriter> &&OW,
-                               std::unique_ptr<MCCodeEmitter> &&CE)
-{
-  return new MCSOFFObjectStreamer(Ctx, std::move(TAB), std::move(OW), std::move(CE));
+                                     std::unique_ptr<MCAsmBackend> &&TAB,
+                                     std::unique_ptr<MCObjectWriter> &&OW,
+                                     std::unique_ptr<MCCodeEmitter> &&CE) {
+  return new MCSOFFObjectStreamer(Ctx, std::move(TAB), std::move(OW),
+                                  std::move(CE));
 }
 } // namespace llvm

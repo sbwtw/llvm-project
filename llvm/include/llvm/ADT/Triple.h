@@ -277,6 +277,7 @@ public:
     SPIRV,
     Wasm,
     XCOFF,
+    SOFF,
   };
 
 private:

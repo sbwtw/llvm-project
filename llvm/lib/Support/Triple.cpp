@@ -771,6 +771,8 @@ static StringRef getObjectFormatTypeName(Triple::ObjectFormatType Kind) {
     return "dxcontainer";
   case Triple::SPIRV:
     return "spirv";
+  case Triple::SOFF:
+    return "soff";
   }
   llvm_unreachable("unknown object format type");
 }

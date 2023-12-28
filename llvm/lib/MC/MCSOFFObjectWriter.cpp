@@ -4,9 +4,10 @@
 
 #include "llvm/MC/MCSOFFObjectWriter.h"
 #include "llvm/MC/MCAssembler.h"
-#include "llvm/MC/MCValue.h"
-#include "llvm/MC/MCSection.h"
 #include "llvm/MC/MCFragment.h"
+#include "llvm/MC/MCSection.h"
+#include "llvm/MC/MCValue.h"
+#include "llvm/Support/Casting.h"
 
 using namespace llvm;
 
